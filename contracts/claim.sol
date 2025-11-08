@@ -1,15 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract claim {
-    // Set current user to owner
+/// Minimal read-only interface to the Policy registry.
+interface IPolicyReader {
+    function getPolicy(uint256 policyId)
+        external
+        view
+        returns (
+            address holder,
+            uint64  effectiveAt,
+            uint64  expiresAt,
+            uint128 maxCoverage,
+            uint128 deductible,
+            bool    active,
+            string memory details
+        );
+    function isPolicyActiveAt(uint256 policyId, uint64 ts) external view returns (bool);
+}
+
+contract Claim {
     address public owner;
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not owner");
+    IPolicyReader public policy; // policy registry/reader contract
+
+    modifier onlyAdmin() {
+        require(msg.sender == owner, "not admin");
         _;
     }
-    constructor() {
+
+    constructor(address policyRegistry) {
         owner = msg.sender;
+        policy = IPolicyReader(policyRegistry);
 
         _tierCap[1]  = 1000;
         _tierCap[2]  = 5000;
@@ -22,7 +42,8 @@ contract claim {
         _tierCap[9]  = 5000000;
         _tierCap[10] = 10000000;
     }
-    // Enums
+
+    // ===== Enums =====
     enum Status {
         Submitted,          // 0
         SeverityProposed,   // 1
@@ -42,12 +63,21 @@ contract claim {
         Other            // 4
     }    
 
-    // Parameters of Claim
-    struct Claim {
+    // ===== Data Model =====
+    struct ClaimData {
         // Core identifiers
         bytes8  claimCode;
         address claimant;
         uint64  createdAt;
+
+        // Policy snapshot (at creation)
+        uint256 policyId;
+        address policyHolder;
+        uint64  policyEffectiveAt;
+        uint64  policyExpiresAt;
+        uint128 policyMaxCoverage;
+        uint128 policyDeductible;
+        string  policyDetails;
 
         // Parties & roles
         address adjuster;
@@ -73,47 +103,85 @@ contract claim {
         // AI severity proposal
         uint8   aiTier;        
         uint128 aiCapAmount;   
-        bytes32 aiProofRef;
-        address aiSigner;
+        string  aiNotes;
 
         // Adjuster decision
         uint128 finalCapAmount;
-        bytes32 adjusterNotesRef;
+        string  adjusterNotes;
         bool    isCapLocked;
 
         // Repair quote
         uint128 quoteAmount;
-        bytes32 quoteRef;
+        string  quoteRef;
+        address quoteCurrency;
 
         // Payout planning & settlement
         uint128 approvedAmount;
+        address payoutCurrency;
         uint256 escrowId;
         bool    payoutToShop;
         bytes32 payoutTxRef;
     }   
 
-    mapping(bytes8 => Claim) private _claims;
+    mapping(bytes8 => ClaimData) private _claims;
     mapping(bytes8 => bool)  private _usedCodes;
     mapping(uint8 => uint128) private _tierCap;
 
+    // ===== Events =====
     event ClaimSubmitted(
         bytes8  indexed claimCode,
         address indexed claimant,
         uint64 incidentAt,
         string incidentAddress,
         string description,
-        IncidentType incidentType
+        IncidentType incidentType,
+        uint256 indexed policyId
     );
     event AdjusterAssigned(bytes8 indexed claimCode, address indexed adjuster);
-    event SeverityProposed(bytes8 indexed claimCode, uint8 aiTier, uint128 aiCapAmount, address indexed aiSigner, bytes32 aiProofRef);
-    event SeverityFinalized(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, bytes32 notesRef, bool locked);
-    event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, bytes32 quoteRef, address quoteCurrency);
+    event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
+    event SeverityProposed(bytes8 indexed claimCode, uint8 aiTier, uint128 aiCapAmount, string aiNotes);
+    event SeverityFinalized(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes, bool locked);
+    event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef, address quoteCurrency);
     event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address payoutCurrency, uint256 escrowId, bool toShop);
     event ClaimDenied(bytes8 indexed claimCode, uint8 reasonCode);
     event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount, bytes32 payoutTxRef);
     event ClaimClosed(bytes8 indexed claimCode);
 
-    function setTierCap(uint8 tier, uint128 cap) external onlyOwner {
+    // ===== Role modifiers (per-claim) =====
+    modifier onlyExisting(bytes8 claimCode) {
+        require(_claims[claimCode].claimCode != bytes8(0), "no such claim");
+        _;
+    }
+    modifier onlyClaimant(bytes8 claimCode) {
+        require(msg.sender == _claims[claimCode].claimant, "not claimant");
+        _;
+    }
+    modifier onlyAdjuster(bytes8 claimCode) {
+        require(msg.sender == _claims[claimCode].adjuster, "not adjuster");
+        _;
+    }
+    modifier onlyShop(bytes8 claimCode) {
+        require(msg.sender == _claims[claimCode].shop, "not shop");
+        _;
+    }
+    modifier onlyAdjusterOrAdmin(bytes8 claimCode) {
+        ClaimData storage c = _claims[claimCode];
+        require(msg.sender == c.adjuster || msg.sender == owner, "not adjuster/admin");
+        _;
+    }
+    modifier onlyShopOrClaimant(bytes8 claimCode) {
+        ClaimData storage c = _claims[claimCode];
+        require(msg.sender == c.shop || msg.sender == c.claimant, "not shop/claimant");
+        _;
+    }
+
+    // ===== Admin settings =====
+    function setPolicyRegistry(address policyRegistry) external onlyAdmin {
+        policy = IPolicyReader(policyRegistry);
+    }
+
+    // ===== Tier caps (admin) =====
+    function setTierCap(uint8 tier, uint128 cap) external onlyAdmin {
         require(tier >= 1 && tier <= 10, "tier out of range");
         require(cap > 0, "cap=0");
         _tierCap[tier] = cap;
@@ -124,29 +192,74 @@ contract claim {
         return _tierCap[tier];
     }
 
-    function setAdjuster(bytes8 claimCode, address adjuster) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
-        c.adjuster = adjuster;
+    // ===== Role assignment (scoped to claim) =====
+
+    function setAdjuster(bytes8 claimCode, address adjuster) external onlyAdmin onlyExisting(claimCode) {
+        require(adjuster != address(0), "zero adjuster");
+        _claims[claimCode].adjuster = adjuster;
         emit AdjusterAssigned(claimCode, adjuster);
     }
 
+    function setShop(bytes8 claimCode, address shop) external onlyClaimant(claimCode) onlyExisting(claimCode) {
+        require(shop != address(0), "zero shop");
+        ClaimData storage c = _claims[claimCode];
+        require(
+            c.status == Status.Submitted || 
+            c.status == Status.SeverityProposed || 
+            c.status == Status.SeverityFinalized, 
+            "too late to set shop"
+        );
+        c.shop = shop;
+        emit ShopAssigned(claimCode, shop);
+    }
+
+    function adminSetShop(bytes8 claimCode, address shop) external onlyAdmin onlyExisting(claimCode) {
+        require(shop != address(0), "zero shop");
+        _claims[claimCode].shop = shop;
+        emit ShopAssigned(claimCode, shop);
+    }
+
+    /// Create a claim and bind it to a policy. Claimant must be the policy holder.
     function createClaim(
         bytes8       claimCode,
+        uint256      policyId,
         uint64       incidentAt,
         string calldata incidentAddress,
         string calldata description,
         IncidentType incidentType
-    ) external onlyOwner returns (bytes8) {
+    ) external returns (bytes8) {
         require(_isValidClaimCode(claimCode), "invalid code");
         require(!_usedCodes[claimCode], "code already used");
         _usedCodes[claimCode] = true;
 
-        Claim storage c = _claims[claimCode];
+        // Read policy and validate
+        (
+            address holder,
+            uint64  effectiveAt,
+            uint64  expiresAt,
+            uint128 maxCoverage,
+            uint128 deductible,
+            bool    active,
+            string memory details
+        ) = policy.getPolicy(policyId);
+
+        require(active, "policy inactive");
+        require(msg.sender == holder, "not policy holder");
+        require(incidentAt >= effectiveAt && incidentAt <= expiresAt, "incident outside policy window");
+
+        ClaimData storage c = _claims[claimCode];
 
         c.claimCode = claimCode;
-        c.claimant  = owner;
+        c.claimant  = msg.sender;
         c.createdAt = uint64(block.timestamp);
+
+        c.policyId          = policyId;
+        c.policyHolder      = holder;
+        c.policyEffectiveAt = effectiveAt;
+        c.policyExpiresAt   = expiresAt;
+        c.policyMaxCoverage = maxCoverage;
+        c.policyDeductible  = deductible;
+        c.policyDetails     = details;
 
         c.status      = Status.Submitted;
         c.submittedAt = uint64(block.timestamp);
@@ -156,23 +269,21 @@ contract claim {
         c.description     = description;
         c.incidentType    = incidentType;
 
-        // For demo, you play all parties
-        c.adjuster = owner;
-        c.shop     = owner;
-        c.payee    = owner;
-
-        emit ClaimSubmitted(claimCode, c.claimant, incidentAt, incidentAddress, description, incidentType);
+        emit ClaimSubmitted(claimCode, c.claimant, incidentAt, incidentAddress, description, incidentType, policyId);
         return claimCode;
     }
 
+    // Adjuster or admin proposes AI severity
     function proposeSeverity(
         bytes8  claimCode,
         uint8   aiTier,
-        bytes32 aiProofRef
-    ) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
-        require(c.status == Status.Submitted || c.status == Status.SeverityProposed, "bad status");
+        string calldata aiNotes
+    ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
+        require(
+            c.status == Status.Submitted || c.status == Status.SeverityProposed, 
+            "bad status"
+        );
         require(aiTier >= 1 && aiTier <= 10, "tier out of range");
 
         uint128 cap = _tierCap[aiTier];
@@ -180,48 +291,51 @@ contract claim {
 
         c.aiTier      = aiTier;
         c.aiCapAmount = cap;
-        c.aiProofRef  = aiProofRef;
-        c.aiSigner    = owner;
+        c.aiNotes     = aiNotes;
         c.severityProposedAt = uint64(block.timestamp);
         c.status = Status.SeverityProposed;
 
-        emit SeverityProposed(claimCode, aiTier, cap, owner, aiProofRef);
+        emit SeverityProposed(claimCode, aiTier, cap, aiNotes);
     }
 
+    // Adjuster finalizes severity (cannot exceed AI cap)
     function adjusterConfirmSeverity(
         bytes8  claimCode,
         uint128 finalCapAmount,
-        bytes32 notesRef,
+        string calldata adjusterNotes,
         bool    lockCap
-    ) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
-        require(c.status == Status.SeverityProposed || c.status == Status.SeverityFinalized, "bad status");
+    ) external onlyAdjuster(claimCode) onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
+        require(
+            c.status == Status.SeverityProposed || c.status == Status.SeverityFinalized, 
+            "bad status"
+        );
         require(finalCapAmount > 0, "cap=0");
         require(finalCapAmount <= c.aiCapAmount, "final cap > AI cap");
 
         c.finalCapAmount      = finalCapAmount;
-        c.adjusterNotesRef    = notesRef;
+        c.adjusterNotes       = adjusterNotes;
         c.severityFinalizedAt = uint64(block.timestamp);
         c.status              = Status.SeverityFinalized;
 
         if (lockCap) c.isCapLocked = true;
 
-        emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, notesRef, lockCap);
+        emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, adjusterNotes, lockCap);
     }
 
+    // Shop (or claimant if shop==0 yet) submits repair quote
     function submitRepairQuote(
         bytes8  claimCode,
         uint128 quoteAmount,
-        bytes32 quoteRef,
+        string calldata quoteRef,
         address quoteCurrency
-    ) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
-        require(c.status == Status.SeverityFinalized || c.status == Status.QuoteSubmitted, "bad status");
+    ) external onlyShopOrClaimant(claimCode) onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
+        require(
+            c.status == Status.SeverityFinalized || c.status == Status.QuoteSubmitted, 
+            "bad status"
+        );
         require(quoteAmount > 0, "quote=0");
-
-        if (c.shop == address(0)) c.shop = owner;
 
         c.quoteAmount      = quoteAmount;
         c.quoteRef         = quoteRef;
@@ -232,6 +346,7 @@ contract claim {
         emit QuoteSubmitted(claimCode, c.shop, quoteAmount, quoteRef, quoteCurrency);
     }
 
+    // Adjuster (or admin) approves payout up to min(finalCap, quote, policyMaxCoverage)
     function approvePayout(
         bytes8  claimCode,
         address payee,
@@ -239,28 +354,32 @@ contract claim {
         address payoutCurrency,
         uint256 escrowId,
         bool    payoutToShop
-    ) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
+    ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
         require(c.status == Status.QuoteSubmitted, "bad status");
         require(amount > 0, "amount=0");
         require(amount <= c.finalCapAmount, "over final cap");
         require(amount <= c.quoteAmount, "over quote");
+        require(amount <= c.policyMaxCoverage, "over policy coverage");
+
+        // If you want to *automatically* apply deductible:
+        // require(c.policyDeductible <= amount, "below deductible");
+        // amount = amount - c.policyDeductible;
 
         c.approvedAmount = amount;
         c.payoutCurrency = payoutCurrency;
         c.escrowId       = escrowId;
         c.payoutToShop   = payoutToShop;
-        c.payee          = payee == address(0) ? owner : payee;
+        c.payee          = payee == address(0) ? c.claimant : payee;
         c.approvedAt     = uint64(block.timestamp);
         c.status         = Status.PayoutApproved;
 
         emit PayoutApproved(claimCode, c.payee, amount, payoutCurrency, escrowId, payoutToShop);
     }
 
-    function markPaid(bytes8 claimCode, bytes32 payoutTxRef) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
+    // Admin records payment settlement tx/hash
+    function markPaid(bytes8 claimCode, bytes32 payoutTxRef) external onlyAdmin onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
         require(c.status == Status.PayoutApproved, "bad status");
 
         c.payoutTxRef = payoutTxRef;
@@ -270,9 +389,9 @@ contract claim {
         emit ClaimPaid(claimCode, c.payee, c.approvedAmount, payoutTxRef);
     }
 
-    function denyClaim(bytes8 claimCode, uint8 reasonCode) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
+    // Adjuster or admin can deny before payout approval
+    function denyClaim(bytes8 claimCode, uint8 reasonCode) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
         require(
             c.status == Status.Submitted ||
             c.status == Status.SeverityProposed ||
@@ -284,16 +403,17 @@ contract claim {
         emit ClaimDenied(claimCode, reasonCode);
     }
 
-    function closeClaim(bytes8 claimCode) external onlyOwner {
-        Claim storage c = _claims[claimCode];
-        require(c.claimCode != bytes8(0), "no such claim");
+    // Admin closes after Paid or Denied
+    function closeClaim(bytes8 claimCode) external onlyAdmin onlyExisting(claimCode) {
+        ClaimData storage c = _claims[claimCode];
         require(c.status == Status.Paid || c.status == Status.Denied, "must be Paid or Denied");
         c.closedAt = uint64(block.timestamp);
         c.status   = Status.Closed;
         emit ClaimClosed(claimCode);
     }
 
-    function getClaim(bytes8 claimCode) external view returns (Claim memory) {
+    // ===== Views =====
+    function getClaim(bytes8 claimCode) external view returns (ClaimData memory) {
         return _claims[claimCode];
     }
     function getStatus(bytes8 claimCode) external view returns (Status) {
@@ -322,4 +442,9 @@ contract claim {
         return true;
     }
 
+    // ===== Optional: admin controls =====
+    function transferOwnership(address newOwner) external onlyAdmin {
+        require(newOwner != address(0), "zero owner");
+        owner = newOwner;
+    }
 }
