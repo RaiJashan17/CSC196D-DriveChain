@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 contract Policy {
     struct PolicyData {
         uint256 id;
-        address holder;        // Policy owner / holder
-        uint64  effectiveAt;   // Start time (unix)
-        uint64  expiresAt;     // End time (unix)
-        uint128 maxCoverage;   // Max payout across a single claim (snapshot into claim)
-        uint128 deductible;    // Amount the claimant must cover before coverage applies
-        bool    active;        // Admin/holder can deactivate
-        string  details;       // Free-form metadata (vehicle/VIN, address, etc.)
+        address holder;        
+        uint64  effectiveAt;   
+        uint64  expiresAt;     
+        uint128 maxCoverage;   
+        uint128 deductible;    
+        bool    active;        
+        string  details;       
     }
 
     uint256 private _nextId = 1;
@@ -36,7 +36,7 @@ contract Policy {
     );
     event PolicyActiveSet(uint256 indexed policyId, bool active);
 
-    /// Create a new policy. The caller becomes the holder by default.
+    /// Create a new policy
     function createPolicy(
         uint64  effectiveAt,
         uint64  expiresAt,
@@ -45,7 +45,6 @@ contract Policy {
         string calldata details
     ) external returns (uint256 policyId) {
         require(effectiveAt < expiresAt, "bad time range");
-        // No specific relation enforced between deductible and maxCoverage, but you can add one.
         policyId = _nextId++;
         _policies[policyId] = PolicyData({
             id: policyId,
@@ -90,7 +89,6 @@ contract Policy {
         emit PolicyActiveSet(policyId, active);
     }
 
-    // ===== Views =====
     function getPolicy(uint256 policyId)
         external
         view
