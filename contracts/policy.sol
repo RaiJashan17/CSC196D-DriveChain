@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Policy {
+    struct PolicyData {
+        uint256 id;
+        address holder;        // Policy owner / holder
+        uint64  effectiveAt;   // Start time (unix)
+        uint64  expiresAt;     // End time (unix)
+        uint128 maxCoverage;   // Max payout across a single claim (snapshot into claim)
+        uint128 deductible;    // Amount the claimant must cover before coverage applies
+        bool    active;        // Admin/holder can deactivate
+        string  details;       // Free-form metadata (vehicle/VIN, address, etc.)
+    }
+
+    uint256 private _nextId = 1;
+    mapping(uint256 => PolicyData) private _policies;
+
+    event PolicyCreated(
+        uint256 indexed policyId,
+        address indexed holder,
+        uint64 effectiveAt,
+        uint64 expiresAt,
+        uint128 maxCoverage,
+        uint128 deductible,
+        string details
+    );
+    event PolicyUpdated(
+        uint256 indexed policyId,
+        uint64 effectiveAt,
+        uint64 expiresAt,
+        uint128 maxCoverage,
+        uint128 deductible,
+        bool active,
+        string details
+    );
+    event PolicyActiveSet(uint256 indexed policyId, bool active);
+
+    /// Create a new policy. The caller becomes the holder by default.
+    function createPolicy(
+        uint64  effectiveAt,
+        uint64  expiresAt,
+        uint128 maxCoverage,
+        uint128 deductible,
+        string calldata details
+    ) external returns (uint256 policyId) {
+        require(effectiveAt < expiresAt, "bad time range");
+        // No specific relation enforced between deductible and maxCoverage, but you can add one.
+        policyId = _nextId++;
+        _policies[policyId] = PolicyData({
+            id: policyId,
+            holder: msg.sender,
+            effectiveAt: effectiveAt,
+            expiresAt: expiresAt,
+            maxCoverage: maxCoverage,
+            deductible: deductible,
+            active: true,
+            details: details
+        });
+        emit PolicyCreated(policyId, msg.sender, effectiveAt, expiresAt, maxCoverage, deductible, details);
+    }
+
+    /// Holder can update most fields.
+    function updatePolicy(
+        uint256 policyId,
+        uint64  effectiveAt,
+        uint64  expiresAt,
+        uint128 maxCoverage,
+        uint128 deductible,
+        string calldata details
+    ) external {
+        PolicyData storage p = _policies[policyId];
+        require(p.id != 0, "no such policy");
+        require(msg.sender == p.holder, "not holder");
+        require(effectiveAt < expiresAt, "bad time range");
+        p.effectiveAt = effectiveAt;
+        p.expiresAt   = expiresAt;
+        p.maxCoverage = maxCoverage;
+        p.deductible  = deductible;
+        p.details     = details;
+        emit PolicyUpdated(policyId, effectiveAt, expiresAt, maxCoverage, deductible, p.active, details);
+    }
+
+    /// Holder can set active flag (e.g., cancel/restore).
+    function setActive(uint256 policyId, bool active) external {
+        PolicyData storage p = _policies[policyId];
+        require(p.id != 0, "no such policy");
+        require(msg.sender == p.holder, "not holder");
+        p.active = active;
+        emit PolicyActiveSet(policyId, active);
+    }
+
+    // ===== Views =====
+    function getPolicy(uint256 policyId)
+        external
+        view
+        returns (
+            address holder,
+            uint64  effectiveAt,
+            uint64  expiresAt,
+            uint128 maxCoverage,
+            uint128 deductible,
+            bool    active,
+            string memory details
+        )
+    {
+        PolicyData storage p = _policies[policyId];
+        require(p.id != 0, "no such policy");
+        return (p.holder, p.effectiveAt, p.expiresAt, p.maxCoverage, p.deductible, p.active, p.details);
+    }
+
+    function isPolicyActiveAt(uint256 policyId, uint64 ts) external view returns (bool) {
+        PolicyData storage p = _policies[policyId];
+        require(p.id != 0, "no such policy");
+        return p.active && ts >= p.effectiveAt && ts <= p.expiresAt;
+    }
+}
