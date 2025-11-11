@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Claim DApp (Lab-style)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; }
+      fieldset { margin-bottom: 16px; padding: 12px; }
+      label { display:block; margin-top:8px; }
+      input, select, button { padding:6px; }
+      #log { background:#111; color:#0f0; padding:10px; height:180px; overflow:auto; }
+      pre { background:#f6f8fa; padding:10px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/web3@4.6.0/dist/web3.min.js"></script>
+  </head>
+  <body>
+    <h1>Claim DApp (Truffle/Web3.js)</h1>
+
+    <fieldset>
+      <legend>RPC & Accounts</legend>
+      <button id="btnInit">Init RPC (Ganache)</button>
+      <span id="connected"></span>
+      <label>
+        Active account:
+        <select id="activeAccount"></select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Load Contract</legend>
+      <label>
+        Claim contract address:
+        <input id="claimAddress" placeholder="0x..." style="width:440px;" />
+      </label>
+      <button id="btnLoadClaim">Load Contract</button>
+      <small>ABI auto-loaded from <code>./build/contracts/Claim.json</code></small>
+    </fieldset>
+
+    <fieldset>
+      <legend>transferOwnership</legend>
+      <label>
+        New owner:
+        <input id="newOwner" placeholder="0x..." />
+      </label>
+      <button id="btnXfer">Transfer</button>
+      <pre id="xferOut"></pre>
+    </fieldset>
+
+    <fieldset>
+      <legend>Advanced (generic)</legend>
+      <div>
+        <label>Read (view/pure): function name <input id="callFn" placeholder="fnName" /></label>
+        <label>Args (comma-separated) <input id="callArgs" placeholder="e.g. 1, 1234" /></label>
+        <button id="btnCall">Call</button>
+      </div>
+      <div style="margin-top:8px;">
+        <label>Write (state-changing): function name <input id="sendFn" placeholder="fnName" /></label>
+        <label>Args (comma-separated) <input id="sendArgs" placeholder="e.g. 1, 'hello'" /></label>
+        <button id="btnSend">Send</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Log</legend>
+      <pre id="log"></pre>
+    </fieldset>
+
+    <script type="module" src="./app-claim.js"></script>
+  </body>
+</html>

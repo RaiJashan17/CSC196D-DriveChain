@@ -5,8 +5,8 @@ contract Policy {
     struct PolicyData {
         uint256 id;
         address holder;        
-        uint64  effectiveAt;   
-        uint64  expiresAt;     
+        uint128  effectiveAt;   
+        uint128  expiresAt;     
         uint128 maxCoverage;   
         uint128 deductible;    
         bool    active;        
@@ -19,16 +19,16 @@ contract Policy {
     event PolicyCreated(
         uint256 indexed policyId,
         address indexed holder,
-        uint64 effectiveAt,
-        uint64 expiresAt,
+        uint128 effectiveAt,
+        uint128 expiresAt,
         uint128 maxCoverage,
         uint128 deductible,
         string details
     );
     event PolicyUpdated(
         uint256 indexed policyId,
-        uint64 effectiveAt,
-        uint64 expiresAt,
+        uint128 effectiveAt,
+        uint128 expiresAt,
         uint128 maxCoverage,
         uint128 deductible,
         bool active,
@@ -38,8 +38,8 @@ contract Policy {
 
     /// Create a new policy
     function createPolicy(
-        uint64  effectiveAt,
-        uint64  expiresAt,
+        uint128  effectiveAt,
+        uint128  expiresAt,
         uint128 maxCoverage,
         uint128 deductible,
         string calldata details
@@ -62,8 +62,8 @@ contract Policy {
     /// Holder can update most fields.
     function updatePolicy(
         uint256 policyId,
-        uint64  effectiveAt,
-        uint64  expiresAt,
+        uint128  effectiveAt,
+        uint128  expiresAt,
         uint128 maxCoverage,
         uint128 deductible,
         string calldata details
@@ -94,8 +94,8 @@ contract Policy {
         view
         returns (
             address holder,
-            uint64  effectiveAt,
-            uint64  expiresAt,
+            uint128  effectiveAt,
+            uint128  expiresAt,
             uint128 maxCoverage,
             uint128 deductible,
             bool    active,
@@ -107,9 +107,9 @@ contract Policy {
         return (p.holder, p.effectiveAt, p.expiresAt, p.maxCoverage, p.deductible, p.active, p.details);
     }
 
-    function isPolicyActiveAt(uint256 policyId, uint64 ts) external view returns (bool) {
+    function isPolicyActiveAt(uint256 policyId, uint128 ts) external view returns (bool) {
         PolicyData storage p = _policies[policyId];
         require(p.id != 0, "no such policy");
-        return p.active && ts >= p.effectiveAt && ts <= p.expiresAt;
+        return ts >= p.effectiveAt && ts <= p.expiresAt;
     }
 }
