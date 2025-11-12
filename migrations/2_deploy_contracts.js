@@ -15,6 +15,14 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Policy deployed to:", policy.address);
   console.log("Claim  deployed to:", claim.address);
 
+  // function toBytes8(code) {
+  //   if (code.length !== 8) throw new Error("claimCode must be 8 chars [A-Z][0-9]{7}");
+  //     const hex = web3.utils.asciiToHex(code); // "A1234567" -> 0x4131323334353637
+  //   // Sanity check: length should be 18 (2 + 16)
+  //   if (hex.length !== 18) throw new Error("bad hex length for bytes8");
+  //     return hex;
+  // }
+
   // Example Policy and Claim
   const adjuster = accounts[1];
   const now = Date.now();
