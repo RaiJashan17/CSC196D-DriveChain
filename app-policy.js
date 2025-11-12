@@ -60,6 +60,7 @@ export async function initRPC() {
     web3 = new Web3("http://127.0.0.1:8545");
     accounts = await web3.eth.getAccounts();
     if (!accounts.length) throw new Error("No accounts from Ganache. Is ganache-cli running?");
+    
     // Populate dropdown
     const sel = $("#activeAccount");
     sel.innerHTML = "";
@@ -114,8 +115,13 @@ export async function uiGetPolicy() {
     const id = BigInt($("#policyId").value || "0");
     const result = await Policy.methods.getPolicy(id.toString()).call({ from: accounts[activeIndex] });
     // result could be array/tuple — display raw + friendly mapping when possible
-    log(`getPolicy(${id}) → ${safeStringify(result)}`);
-    $("#getPolicyOut").textContent = safeStringify(result, 2);
+    log("WORKED");//log(`getPolicy(${id}) → ${safeStringify(result)}`);
+    log("effectiveAt: " + result.effectiveAt);
+    log("expiresAt: " + result.expiresAt);
+    log("active: " + result.active);
+    log("maxCoverage: " + result.maxCoverage);
+    log("deductible: " + result.deductible);
+    $("#getPolicyOut").textContent = result;
   } catch (e) {
     console.error(e); log(`getPolicy error: ${e.message}`);
   }

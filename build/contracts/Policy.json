@@ -4926,12 +4926,12 @@
         }
       },
       "links": {},
-      "address": "0x7231ECd1355a60251eE56Bf81f987969fc9bAe29",
-      "transactionHash": "0x4b093de7b9e55019d5039159dab91ecc8e9e5fe714261dc1dd2e801f221179e6"
+      "address": "0xe78A0F7E598Cc8b0Bb87894B0F60dD2a88d6a8Ab",
+      "transactionHash": "0x2b3fc6bb74310ba408abdf7d2f7ab63613613e4935140f903d2978bd72a7e02a"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2025-11-11T01:28:37.890Z",
+  "updatedAt": "2025-11-12T01:19:04.756Z",
   "networkType": "ethereum",
   "devdoc": {
     "kind": "dev",
