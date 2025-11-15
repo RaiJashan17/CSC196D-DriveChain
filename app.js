@@ -2,46 +2,46 @@
 
 const POLICY_ABI = [
   {
-    "inputs":[
-      {"internalType":"uint64","name":"effectiveAt","type":"uint64"},
-      {"internalType":"uint64","name":"expiresAt","type":"uint64"},
-      {"internalType":"uint128","name":"maxCoverage","type":"uint128"},
-      {"internalType":"uint128","name":"deductible","type":"uint128"},
-      {"internalType":"string","name":"details","type":"string"}
+    "inputs": [
+      { "internalType": "uint128", "name": "effectiveAt", "type": "uint128" },
+      { "internalType": "uint128", "name": "expiresAt",   "type": "uint128" },
+      { "internalType": "uint128", "name": "maxCoverage", "type": "uint128" },
+      { "internalType": "uint128", "name": "deductible",  "type": "uint128" },
+      { "internalType": "string",  "name": "details",     "type": "string"  }
     ],
-    "name":"createPolicy",
-    "outputs":[{"internalType":"uint256","name":"policyId","type":"uint256"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
+    "name": "createPolicy",
+    "outputs": [{ "internalType": "uint256", "name": "policyId", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "inputs":[{"internalType":"uint256","name":"policyId","type":"uint256"}],
-    "name":"getPolicy",
-    "outputs":[
-      {"internalType":"address","name":"holder","type":"address"},
-      {"internalType":"uint64","name":"effectiveAt","type":"uint64"},
-      {"internalType":"uint64","name":"expiresAt","type":"uint64"},
-      {"internalType":"uint128","name":"maxCoverage","type":"uint128"},
-      {"internalType":"uint128","name":"deductible","type":"uint128"},
-      {"internalType":"bool","name":"active","type":"bool"},
-      {"internalType":"string","name":"details","type":"string"}
+    "inputs": [{ "internalType":"uint256", "name":"policyId", "type":"uint256" }],
+    "name": "getPolicy",
+    "outputs": [
+      { "internalType":"address","name":"holder",     "type":"address" },
+      { "internalType":"uint128","name":"effectiveAt","type":"uint128" },
+      { "internalType":"uint128","name":"expiresAt",  "type":"uint128" },
+      { "internalType":"uint128","name":"maxCoverage","type":"uint128" },
+      { "internalType":"uint128","name":"deductible", "type":"uint128" },
+      { "internalType":"bool",   "name":"active",     "type":"bool"    },
+      { "internalType":"string", "name":"details",    "type":"string"  }
     ],
     "stateMutability":"view",
     "type":"function"
   },
   {
-    "anonymous":false,
-    "inputs":[
-      {"indexed":true,"internalType":"uint256","name":"policyId","type":"uint256"},
-      {"indexed":true,"internalType":"address","name":"holder","type":"address"},
-      {"indexed":false,"internalType":"uint64","name":"effectiveAt","type":"uint64"},
-      {"indexed":false,"internalType":"uint64","name":"expiresAt","type":"uint64"},
-      {"indexed":false,"internalType":"uint128","name":"maxCoverage","type":"uint128"},
-      {"indexed":false,"internalType":"uint128","name":"deductible","type":"uint128"},
-      {"indexed":false,"internalType":"string","name":"details","type":"string"}
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true,  "internalType":"uint256","name":"policyId",    "type":"uint256" },
+      { "indexed": true,  "internalType":"address","name":"holder",      "type":"address" },
+      { "indexed": false, "internalType":"uint128","name":"effectiveAt", "type":"uint128" },
+      { "indexed": false, "internalType":"uint128","name":"expiresAt",   "type":"uint128" },
+      { "indexed": false, "internalType":"uint128","name":"maxCoverage", "type":"uint128" },
+      { "indexed": false, "internalType":"uint128","name":"deductible",  "type":"uint128" },
+      { "indexed": false, "internalType":"string", "name":"details",     "type":"string"  }
     ],
-    "name":"PolicyCreated",
-    "type":"event"
+    "name": "PolicyCreated",
+    "type": "event"
   }
 ];
 
@@ -124,18 +124,59 @@ const CLAIM_ABI = [
     ],
     "name":"ClaimSubmitted",
     "type":"event"
+  },
+  {
+    "inputs": [
+      { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+      { "internalType":"uint128", "name":"amount",    "type":"uint128" },
+      { "internalType":"string",  "name":"quoteRef",  "type":"string"  },
+      { "internalType":"address", "name":"currency",  "type":"address" }
+    ],
+    "name":"submitRepairQuote",
+    "outputs":[],
+    "stateMutability":"nonpayable",
+    "type":"function"
+  },
+  {
+    "anonymous":false,
+    "inputs":[
+      {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
+      {"indexed":true,"internalType":"address","name":"shop","type":"address"},
+      {"indexed":false,"internalType":"uint128","name":"quoteAmount","type":"uint128"},
+      {"indexed":false,"internalType":"string","name":"quoteRef","type":"string"},
+      {"indexed":false,"internalType":"address","name":"quoteCurrency","type":"address"}
+    ],
+    "name":"QuoteSubmitted",
+    "type":"event"
+  },
+  {
+  "inputs": [
+    { "internalType": "bytes8",  "name": "claimCode", "type": "bytes8" },
+    { "internalType": "address", "name": "shop",      "type": "address" }
+  ],
+  "name": "setShop",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+  },
+  {
+  "anonymous": false,
+  "inputs": [
+    { "indexed": true,  "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+    { "indexed": true,  "internalType":"address", "name":"shop",      "type":"address" }
+  ],
+  "name": "ShopAssigned",
+  "type": "event"
   }
 ];
 
-/** ===== App State ===== */
 let web3;
 let account = null;
 let chainId = null;
-let policy, claim; // web3.eth.Contract instances
+let policy, claim; 
 let POLICY_ADDRESS = "";
 let CLAIM_ADDRESS  = "";
 
-/** ===== Helpers ===== */
 function parseGasInputs(prefix) {
   const gasStr = (el(prefix + "Gas")?.value || "").trim();
   const gpStr  = (el(prefix + "GasPrice")?.value || "").trim();
@@ -149,7 +190,6 @@ function parseGasInputs(prefix) {
     try { sendOpts.gasPrice = web3.utils.toWei(gpStr, "gwei"); } catch {}
   }
   if (valStr) {
-    // only include value if user provided something; UI defaults to none
     sendOpts.value = valStr;
   }
   return sendOpts;
@@ -182,7 +222,6 @@ function asciiToBytes8(str) {
   const s = str.trim().toUpperCase();
   assert(/^[A-Z][0-9]{7}$/.test(s), "Code must match ^[A-Z][0-9]{7}$");
   const hex = web3.utils.utf8ToHex(s);
-  // Must be exactly 8 bytes (0x + 16 hex chars)
   assert(hex.length === 18, "Claim code must be exactly 8 ASCII chars");
   return hex;
 }
@@ -205,7 +244,7 @@ function setStatus(acct, chain) {
 }
 
 function attachContracts() {
-  assert(web3, "Init RPC or connect wallet first");
+  assert(web3, "Init RPC");
   assert(web3.utils.isAddress(POLICY_ADDRESS), "Invalid Policy address");
   assert(web3.utils.isAddress(CLAIM_ADDRESS), "Invalid Claim address");
   policy = new web3.eth.Contract(POLICY_ABI, POLICY_ADDRESS);
@@ -213,18 +252,15 @@ function attachContracts() {
 }
 
 function requireContractsReady() {
-  assert(web3 && account, "Init RPC and choose an account (or connect wallet)");
+  assert(web3 && account, "Init RPC and choose an account");
   assert(policy && claim, "Set the contract addresses and click 'Use These Addresses'");
 }
 
-/** ===== RPC Init (Ganache) ===== */
 async function initGanache() {
   const url = el("rpcUrl").value.trim() || "http://127.0.0.1:8545";
   web3 = new Web3(new Web3.providers.HttpProvider(url));
-  // Populate accounts
   const accounts = await web3.eth.getAccounts();
   if (!accounts || accounts.length === 0) throw new Error("No accounts from RPC. Is Ganache running?");
-  // Fill dropdown
   const sel = el("activeAccount");
   sel.innerHTML = accounts.map(a => `<option value="${a}">${a}</option>`).join("");
   account = accounts[0];
@@ -233,12 +269,10 @@ async function initGanache() {
     account = sel.value;
     setStatus(account, chainId);
   });
-  // Chain id
   try { chainId = await web3.eth.getChainId(); } catch { chainId = "unknown"; }
   setStatus(account, chainId);
 }
 
-/** ===== Policy actions ===== */
 async function createPolicy() {
   requireContractsReady();
   const effectiveAt = toSeconds(el("effectiveAt").value);
@@ -256,23 +290,20 @@ async function createPolicy() {
     const method = policy.methods.createPolicy(
       String(effectiveAt), String(expiresAt), String(maxCoverage), String(deductible), details
     );
-    // Dry-run to surface revert reason before sending
     try { await method.call({ from: account, ...(parseGasInputs("policy").value ? { value: parseGasInputs("policy").value } : {}) }); } catch (dryErr) { throw dryErr; }
-    // Estimate gas if not provided
     let sendOpts = { from: account, ...parseGasInputs("policy") };
     if (!sendOpts.gas) {
       try {
         const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
         sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
       } catch (egErr) {
-        // Fallback to a safe ceiling
         sendOpts.gas = 1000000;
       }
     }
     const tx = await method.send(sendOpts);
     let newId = null;
     if (tx?.events?.PolicyCreated?.returnValues?.policyId) newId = tx.events.PolicyCreated.returnValues.policyId;
-    el("policyTx").innerHTML = `✅ Policy created. TX: <span class="mono">${tx.transactionHash}</span>${newId ? " • Policy ID: "+newId : ""}`;
+    el("policyTx").innerHTML = `Policy created. TX: <span class="mono">${tx.transactionHash}</span>${newId ? " • Policy ID: "+newId : ""}`;
   } catch (err) {
     el("policyTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
@@ -292,7 +323,6 @@ async function loadMyPolicies() {
       el("policiesList").innerHTML = `<span class="warn">No policies found for ${account}</span>`;
       return;
     }
-    // Sort by block/log index
     events.sort((a,b) => (a.blockNumber - b.blockNumber) || (a.logIndex - b.logIndex));
     const rows = [];
     for (const ev of events) {
@@ -330,7 +360,6 @@ function renderPolicy(id, p) {
   return `<div class="card">${renderKV(kv)}</div>`;
 }
 
-/** ===== Claim actions ===== */
 async function createClaim() {
   requireContractsReady();
   const policyId   = el("claimPolicyId").value.trim();
@@ -351,7 +380,6 @@ async function createClaim() {
     const method = claim.methods.createClaim(
       code, String(policyId), String(incidentAt), incAddr, desc, String(incType)
     );
-    // Dry-run for revert reason
     try { await method.call({ from: account, ...(parseGasInputs("claim").value ? { value: parseGasInputs("claim").value } : {}) }); } catch (dryErr) { throw dryErr; }
     let sendOpts = { from: account, ...parseGasInputs("claim") };
     if (!sendOpts.gas) {
@@ -363,7 +391,7 @@ async function createClaim() {
       }
     }
     const tx = await method.send(sendOpts);
-    el("claimTx").innerHTML = `✅ Claim created. TX: <span class="mono">${tx.transactionHash}</span>`;
+    el("claimTx").innerHTML = `Claim created. TX: <span class="mono">${tx.transactionHash}</span>`;
   } catch (err) {
     el("claimTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
@@ -383,7 +411,6 @@ async function loadMyClaims() {
       el("claimsList").innerHTML = `<span class="warn">No claims found for ${account}</span>`;
       return;
     }
-    // Sort by block/log index
     events.sort((a,b) => (a.blockNumber - b.blockNumber) || (a.logIndex - b.logIndex));
     const rows = [];
     for (const ev of events) {
@@ -395,6 +422,58 @@ async function loadMyClaims() {
     el("claimsList").innerHTML = rows.join("<hr/>");
   } catch (err) {
     el("claimsList").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+    console.error(err);
+  }
+}
+
+async function submitShopQuote() {
+  requireContractsReady();
+  const codeStr    = el("claimCode").value.trim();
+  const shopAddr = el("shopAddress").value.trim();
+  const quoteAmount = el("quoteAmount").value.trim();
+  const quoteRef    = el("quoteRef").value.trim();
+  const quoteCurrency = el("quoteCurrency").value.trim() || "0x0000000000000000000000000000000000000000"; // default value
+
+  const code = asciiToBytes8(codeStr);
+  assert(shopAddr, "Provide a valid shop address");
+  assert(quoteAmount, "Provide a valid quote amount");
+  assert(quoteRef, "Provide quote reference notes");
+
+  el("quoteTx").textContent = "Submitting transaction…";
+  try {
+    let method = claim.methods.setShop(
+      code, shopAddr
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("quote").value ? { value: parseGasInputs("quote").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    let sendOpts = { from: account, ...parseGasInputs("quote") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    let tx = await method.send(sendOpts);
+    method = claim.methods.submitRepairQuote(
+      code, quoteAmount, String(quoteRef), quoteCurrency
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("quote").value ? { value: parseGasInputs("quote").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    sendOpts = { from: account, ...parseGasInputs("quote") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    tx = await method.send(sendOpts);
+    el("quoteTx").innerHTML = `Shop quote submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(code).call();
+    el("claimResult").innerHTML = renderClaim(updated);
+  } catch (err) {
+    el("quoteTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
   }
 }
@@ -426,13 +505,13 @@ function renderClaim(c) {
     "Incident Address": c.incidentAddress ?? c[22],
     "Incident Description": c.description ?? c[23],
     "Incident Type": INCIDENT[Number(c.incidentType ?? c[24]) || 0],
-    "Final Cap Amount (USD)": String(c.finalCapAmount ?? c[25]),
+    "Final Cap Amount": String(c.finalCapAmount ?? c[25]),
     "Adjuster Notes": c.adjusterNotes ?? c[26],
     "Cap Locked": (c.isCapLocked ?? c[27]) ? "true" : "false",
-    "Quote Amount (USD)": String(c.quoteAmount ?? c[28]),
+    "Quote Amount": String(c.quoteAmount ?? c[28]),
     "Quote Ref": c.quoteRef ?? c[29],
     "Quote Currency": c.quoteCurrency ?? c[30],
-    "Approved Amount (USD)": String(c.approvedAmount ?? c[31]),
+    "Approved Amount": String(c.approvedAmount ?? c[31]),
     "Payout Currency": c.payoutCurrency ?? c[32],
     "Escrow ID": String(c.escrowId ?? c[33]),
     "Payout To Shop": (c.payoutToShop ?? c[34]) ? "true" : "false",
@@ -442,7 +521,6 @@ function renderClaim(c) {
 }
 
 function renderClaimToUser(c) {
-  console.log(bytes8ToAscii(c.claimCode));
   const kv = {
     "Claim Code": bytes8ToAscii(c.claimCode ?? c[0]),
     "Claimant": c.claimant ?? c[1],
@@ -465,13 +543,12 @@ function renderClaimToUser(c) {
     "Incident Address": c.incidentAddress ?? c[22],
     "Incident Description": c.description ?? c[23],
     "Incident Type": INCIDENT[Number(c.incidentType ?? c[24]) || 0],
-    "Quote Amount (USD)": String(c.quoteAmount ?? c[28]),
-    "Approved Amount (USD)": String(c.approvedAmount ?? c[31]),
+    "Quote Amount": String(c.quoteAmount ?? c[28]),
+    "Approved Amount": String(c.approvedAmount ?? c[31]),
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
 
-/** ===== Wire up UI ===== */
 window.addEventListener("DOMContentLoaded", () => {
   el("initGanacheBtn").addEventListener("click", async () => {
     try { await initGanache(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
@@ -491,7 +568,10 @@ window.addEventListener("DOMContentLoaded", () => {
   el("createClaimBtn").addEventListener("click", async () => {
     try { await createClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
-    el("loadClaimsBtn").addEventListener("click", async () => {
+  el("loadClaimsBtn").addEventListener("click", async () => {
     try { await loadMyClaims(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("submitRepairQuoteBtn").addEventListener("click", async () => {
+    try { await submitShopQuote(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
 });
