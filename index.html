@@ -272,6 +272,56 @@
       </details>
       <div id="claimsList" style="margin-top:12px"></div>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>4) Submit Shop Repair Quote</h2>
+    <div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+        <div>
+          <label for="claimCode">Claim Code (8 chars)</label>
+          <input id="claimCode" maxlength="8" placeholder="A1234567" />
+        </div>
+        <div>
+          <label for="shopAddress">Shop Address (0x…)</label>
+          <input id="shopAddress" class="mono" placeholder="0x..." />
+        </div>
+        <div>
+          <label for="quoteAmount">Quote Amount</label>
+          <input id="quoteAmount" class="mono" placeholder="10000" />
+        </div>
+        <div>
+          <label for="quoteCurrency">Currency Address (0x… or 0x0 for native)</label>
+          <input id="quoteCurrency" class="mono" placeholder="0x0000000000000000000000000000000000000000" />
+        </div>
+        <div>
+          <label for="quoteRef">Quote Reference/Notes</label>
+          <textarea id="quoteRef" placeholder="Quote reference or notes about quote"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="submitRepairQuoteBtn" class="primary">Submit Quote</button>
+      </div>
+      <div id="quoteTx" class="small mono muted" style="margin-top:8px"></div>
+      <details style="margin-top:8px">
+        <summary>Advanced (gas / value)</summary>
+        <div style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+          <div>
+            <label for="quoteGas">Gas Limit (optional)</label>
+            <input id="quoteGas" class="mono" placeholder="auto (estimate)" />
+          </div>
+          <div>
+            <label for="quoteGasPrice">Gas Price (gwei, optional)</label>
+            <input id="quoteGasPrice" class="mono" placeholder="auto" />
+          </div>
+          <div>
+            <label for="quoteValue">Value (wei, optional)</label>
+            <input id="quoteValue" class="mono" placeholder="0" />
+          </div>
+        </div>
+      </details>
+      <div id="claimResult" style="margin-top:12px"></div>
+    </div>
 </body>
 
 </html>
