@@ -128,6 +128,47 @@ const CLAIM_ABI = [
   {
     "inputs": [
       { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+      { "internalType":"uint128", "name":"finalCapAmount",    "type":"uint128" },
+      { "internalType":"string",  "name":"adjusterNotes",  "type":"string"  }
+    ],
+    "name":"adjusterConfirmSeverity",
+    "outputs":[],
+    "stateMutability":"nonpayable",
+    "type":"function"
+  },
+  {
+    "anonymous":false,
+    "inputs":[
+      {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
+      {"indexed":true,"internalType":"uint128","name":"finalCapAmount","type":"uint128"},
+      {"indexed":false,"internalType":"address","name":"adjuster","type":"address"},
+      {"indexed":false,"internalType":"string","name":"adjusterNotes","type":"string"}
+    ],
+    "name":"SeverityFinalized",
+    "type":"event"
+  },
+  {
+  "inputs": [
+    { "internalType": "bytes8",  "name": "claimCode", "type": "bytes8" },
+    { "internalType": "address", "name": "adjuster", "type": "address" }
+  ],
+  "name": "setAdjuster",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+  },
+  {
+  "anonymous": false,
+  "inputs": [
+    { "indexed": true,  "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+    { "indexed": true,  "internalType":"address", "name":"adjuster", "type":"address" }
+  ],
+  "name": "AdjusterAssigned",
+  "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
       { "internalType":"uint128", "name":"amount",    "type":"uint128" },
       { "internalType":"string",  "name":"quoteRef",  "type":"string"  },
       { "internalType":"address", "name":"currency",  "type":"address" }
@@ -220,7 +261,7 @@ function asEtherMaybe(x) {
 function asciiToBytes8(str) {
   assert(typeof str === "string", "claim code must be string");
   const s = str.trim().toUpperCase();
-  assert(/^[A-Z][0-9]{7}$/.test(s), "Code must match ^[A-Z][0-9]{7}$");
+  assert(/^[A-Z][0-9]{7}$/.test(s), "Code must match ^[A-Z][0-9]{7}$: " + s);
   const hex = web3.utils.utf8ToHex(s);
   assert(hex.length === 18, "Claim code must be exactly 8 ASCII chars");
   return hex;
@@ -426,13 +467,64 @@ async function loadMyClaims() {
   }
 }
 
+async function submitAdjusterSeverity() {
+  requireContractsReady();
+  const codeStr    = el("claimCode").value.trim();
+  const insuranceAddr = el("insuranceAddress").value.trim();
+  const insuranceAmount = el("insuranceAmount").value.trim();
+  const insurancRef    = el("insuranceRef").value.trim();
+
+  const code = asciiToBytes8(codeStr);
+  assert(insuranceAddr, "Provide a valid adjuster address");
+  assert(insuranceAmount, "Provide a valid adjuster amount");
+  assert(insurancRef, "Provide adjuster reference notes");
+
+  el("insuranceTx").textContent = "Submitting transaction…";
+  try {
+    let method = claim.methods.setAdjuster(
+      code, insuranceAddr
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("insurance").value ? { value: parseGasInputs("insurance").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    let sendOpts = { from: account, ...parseGasInputs("insurance") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    let tx = await method.send(sendOpts);
+    method = claim.methods.adjusterConfirmSeverity(
+      code, insuranceAmount, String(quoteRef)
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("insurance").value ? { value: parseGasInputs("insurance").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    sendOpts = { from: account, ...parseGasInputs("insurance") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    tx = await method.send(sendOpts);
+    el("quoteTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(code).call();
+    el("claimResult").innerHTML = renderClaim(updated);
+  } catch (err) {
+    el("insuranceTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+    console.error(err);
+  }
+}
+
 async function submitShopQuote() {
   requireContractsReady();
   const codeStr    = el("claimCode").value.trim();
   const shopAddr = el("shopAddress").value.trim();
   const quoteAmount = el("quoteAmount").value.trim();
   const quoteRef    = el("quoteRef").value.trim();
-  const quoteCurrency = el("quoteCurrency").value.trim() || "0x0000000000000000000000000000000000000000"; // default value
+  const quoteCurrency = "0x0000000000000000000000000000000000000000";//el("quoteCurrency").value.trim() || "0x0000000000000000000000000000000000000000"; // default value
 
   const code = asciiToBytes8(codeStr);
   assert(shopAddr, "Provide a valid shop address");
@@ -511,7 +603,7 @@ function renderClaim(c) {
     "Quote Amount": String(c.quoteAmount ?? c[28]),
     "Quote Ref": c.quoteRef ?? c[29],
     "Quote Currency": c.quoteCurrency ?? c[30],
-    "Approved Amount": String(c.approvedAmount ?? c[31]),
+    "Approved Amount": String(c.insuranceAmount ?? c[31]),
     "Payout Currency": c.payoutCurrency ?? c[32],
     "Escrow ID": String(c.escrowId ?? c[33]),
     "Payout To Shop": (c.payoutToShop ?? c[34]) ? "true" : "false",
@@ -544,7 +636,7 @@ function renderClaimToUser(c) {
     "Incident Description": c.description ?? c[23],
     "Incident Type": INCIDENT[Number(c.incidentType ?? c[24]) || 0],
     "Quote Amount": String(c.quoteAmount ?? c[28]),
-    "Approved Amount": String(c.approvedAmount ?? c[31]),
+    "Approved Amount": String(c.insuranceAmount ?? c[31]),
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
@@ -570,6 +662,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   el("loadClaimsBtn").addEventListener("click", async () => {
     try { await loadMyClaims(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("submitInsuranceAmountBtn").addEventListener("click", async () => {
+    try { await submitAdjusterSeverity(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
   el("submitRepairQuoteBtn").addEventListener("click", async () => {
     try { await submitShopQuote(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }

@@ -274,6 +274,52 @@
     </div>
   </div>
 
+<div class="card">
+    <h2>3) Submit Insurance Approved Amount</h2>
+    <div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+        <div>
+          <label for="claimCode">Claim Code (8 chars)</label>
+          <input id="claimCode" maxlength="8" placeholder="A1234567" />
+        </div>
+        <div>
+          <label for="insuranceAddress">Insurance Address (0x…)</label>
+          <input id="insuranceAddress" class="mono" placeholder="0x..." />
+        </div>
+        <div>
+          <label for="insuranceAmount">Approved Amount</label>
+          <input id="insuranceAmount" class="mono" placeholder="10000" />
+        </div>
+        <div>
+          <label for="insuranceRef">Insurance Reference/Notes</label>
+          <textarea id="insuranceRef" placeholder="Insurance reference or notes about insurance"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="submitInsuranceAmountBtn" class="primary">Submit Amount</button>
+      </div>
+      <div id="insuranceTx" class="small mono muted" style="margin-top:8px"></div>
+      <details style="margin-top:8px">
+        <summary>Advanced (gas / value)</summary>
+        <div style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+          <div>
+            <label for="insuranceGas">Gas Limit (optional)</label>
+            <input id="insuranceGas" class="mono" placeholder="auto (estimate)" />
+          </div>
+          <div>
+            <label for="insuranceGasPrice">Gas Price (gwei, optional)</label>
+            <input id="insuranceGasPrice" class="mono" placeholder="auto" />
+          </div>
+          <div>
+            <label for="insuranceValue">Value (wei, optional)</label>
+            <input id="insuranceValue" class="mono" placeholder="0" />
+          </div>
+        </div>
+      </details>
+      <div id="claimResult" style="margin-top:12px"></div>
+    </div>
+  </div>
+
   <div class="card">
     <h2>4) Submit Shop Repair Quote</h2>
     <div>
@@ -322,6 +368,7 @@
       </details>
       <div id="claimResult" style="margin-top:12px"></div>
     </div>
+  </div>
 </body>
 
 </html>

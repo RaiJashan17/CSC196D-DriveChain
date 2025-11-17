@@ -30,16 +30,6 @@ contract Claim {
         owner = msg.sender;
         policy = IPolicyReader(policyRegistry);
 
-        // _tierCap[1]  = 1000;
-        // _tierCap[2]  = 5000;
-        // _tierCap[3]  = 10000;
-        // _tierCap[4]  = 25000;
-        // _tierCap[5]  = 50000;
-        // _tierCap[6]  = 100000;
-        // _tierCap[7]  = 250000;
-        // _tierCap[8]  = 1000000;
-        // _tierCap[9]  = 5000000;
-        // _tierCap[10] = 10000000;
     }
 
     // ===== Enums =====
@@ -98,15 +88,9 @@ contract Claim {
         string       description;
         IncidentType incidentType;
 
-        // AI severity proposal
-        // uint8   aiTier;        
-        // uint128 aiCapAmount;   
-        // string  aiNotes;
-
         // Adjuster decision
         uint128 finalCapAmount;
         string  adjusterNotes;
-        bool    isCapLocked;
 
         // Repair quote
         uint128 quoteAmount;
@@ -123,7 +107,6 @@ contract Claim {
 
     mapping(bytes8 => ClaimData) private _claims;
     mapping(bytes8 => bool)  private _usedCodes;
-    mapping(uint8 => uint128) private _tierCap;
 
     event ClaimSubmitted(
         bytes8  indexed claimCode,
@@ -136,8 +119,7 @@ contract Claim {
     );
     event AdjusterAssigned(bytes8 indexed claimCode, address indexed adjuster);
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
-    // event SeverityProposed(bytes8 indexed claimCode, uint8 aiTier, uint128 aiCapAmount, string aiNotes);
-    event SeverityFinalized(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes, bool locked);
+    event SeverityFinalized(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
     event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef, address quoteCurrency);
     event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address payoutCurrency, uint256 escrowId, bool toShop);
     event ClaimDenied(bytes8 indexed claimCode, uint8 reasonCode);
@@ -174,17 +156,6 @@ contract Claim {
     function setPolicyRegistry(address policyRegistry) external onlyAdmin {
         policy = IPolicyReader(policyRegistry);
     }
-
-    // function setTierCap(uint8 tier, uint128 cap) external onlyAdmin {
-    //     require(tier >= 1 && tier <= 10, "tier out of range");
-    //     require(cap > 0, "cap=0");
-    //     _tierCap[tier] = cap;
-    // }
-
-    // function getTierCap(uint8 tier) external view returns (uint128) {
-    //     require(tier >= 1 && tier <= 10, "tier out of range");
-    //     return _tierCap[tier];
-    // }
 
     function setAdjuster(bytes8 claimCode, address adjuster) external onlyAdmin onlyExisting(claimCode) {
         require(adjuster != address(0), "zero adjuster");
@@ -264,37 +235,10 @@ contract Claim {
         return claimCode;
     }
 
-    // Adjuster or admin proposes AI severity
-    // function proposeSeverity(
-    //     bytes8  claimCode,
-    //     uint8   aiTier,
-    //     string calldata aiNotes
-    // ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
-    //     ClaimData storage c = _claims[claimCode];
-    //     require(
-    //         c.status == Status.Submitted || c.status == Status.SeverityProposed, 
-    //         "bad status"
-    //     );
-    //     require(aiTier >= 1 && aiTier <= 10, "tier out of range");
-
-    //     uint128 cap = _tierCap[aiTier];
-    //     require(cap > 0, "cap not set");
-
-    //     c.aiTier      = aiTier;
-    //     c.aiCapAmount = cap;
-    //     c.aiNotes     = aiNotes;
-    //     c.severityProposedAt = uint64(block.timestamp);
-    //     c.status = Status.SeverityProposed;
-
-    //     emit SeverityProposed(claimCode, aiTier, cap, aiNotes);
-    // }
-
-    // Adjuster finalizes severity (cannot exceed AI cap)
     function adjusterConfirmSeverity(
         bytes8  claimCode,
         uint128 finalCapAmount,
-        string calldata adjusterNotes,
-        bool    lockCap
+        string calldata adjusterNotes
     ) external onlyAdjuster(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
@@ -302,16 +246,13 @@ contract Claim {
             "bad status"
         );
         require(finalCapAmount > 0, "cap=0");
-        // require(finalCapAmount <= c.aiCapAmount, "final cap > AI cap");
 
         c.finalCapAmount      = finalCapAmount;
         c.adjusterNotes       = adjusterNotes;
         c.severityFinalizedAt = uint64(block.timestamp);
         c.status              = Status.SeverityFinalized;
 
-        if (lockCap) c.isCapLocked = true;
-
-        emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, adjusterNotes, lockCap);
+        emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, adjusterNotes);
     }
 
     // Shop submits repair quote
