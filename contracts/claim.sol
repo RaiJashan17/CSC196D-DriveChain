@@ -74,8 +74,7 @@ contract Claim {
         // Status & timestamps
         Status  status;
         uint64  submittedAt;
-        uint64  severityProposedAt;
-        uint64  severityFinalizedAt;
+        uint64  severitySubmittedAt;
         uint64  quoteSubmittedAt;
         uint64  approvedAt;
         uint64  paidAt;
@@ -118,7 +117,7 @@ contract Claim {
     );
     event AdjusterAssigned(bytes8 indexed claimCode, address indexed adjuster);
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
-    event SeverityFinalized(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
+    event SeveritySubmitted(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
     event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef, address quoteCurrency);
     event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address payoutCurrency, uint256 escrowId, bool toShop);
     event ClaimDenied(bytes8 indexed claimCode, uint8 reasonCode);
@@ -162,12 +161,12 @@ contract Claim {
         emit AdjusterAssigned(claimCode, adjuster);
     }
 
-    function setShop(bytes8 claimCode, address shop) external onlyClaimant(claimCode) onlyExisting(claimCode) {
+    function setShop(bytes8 claimCode, address shop) external onlyExisting(claimCode) {
         require(shop != address(0), "zero shop");
         ClaimData storage c = _claims[claimCode];
         require(
-            c.status == Status.Submitted || 
-            c.status == Status.SeveritySubmitted, 
+            c.status == Status.SeveritySubmitted
+            || c.status == Status.QuoteSubmitted, 
             "too late to set shop"
         );
         c.shop = shop;
@@ -247,10 +246,10 @@ contract Claim {
 
         c.finalCapAmount      = finalCapAmount;
         c.adjusterNotes       = adjusterNotes;
-        c.severityFinalizedAt = uint64(block.timestamp);
+        c.severitySubmittedAt = uint64(block.timestamp);
         c.status              = Status.SeveritySubmitted;
 
-        emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, adjusterNotes);
+        emit SeveritySubmitted(claimCode, finalCapAmount, c.adjuster, adjusterNotes);
     }
 
     // Shop submits repair quote
@@ -261,10 +260,10 @@ contract Claim {
         address quoteCurrency
     ) external onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
-        require(
-            c.status == Status.SeveritySubmitted || c.status == Status.QuoteSubmitted, 
-            "bad status"
-        );
+        // require(
+        //     c.status == Status.SeveritySubmitted || c.status == Status.QuoteSubmitted, 
+        //     "bad status"
+        // );
         require(quoteAmount > 0, "quote=0");
 
         c.quoteAmount      = quoteAmount;

@@ -81,8 +81,7 @@ const CLAIM_ABI = [
           {"internalType":"address","name":"payee","type":"address"},
           {"internalType":"uint8","name":"status","type":"uint8"},
           {"internalType":"uint64","name":"submittedAt","type":"uint64"},
-          {"internalType":"uint64","name":"severityProposedAt","type":"uint64"},
-          {"internalType":"uint64","name":"severityFinalizedAt","type":"uint64"},
+          {"internalType":"uint64","name":"severitySubmittedAt","type":"uint64"},
           {"internalType":"uint64","name":"quoteSubmittedAt","type":"uint64"},
           {"internalType":"uint64","name":"approvedAt","type":"uint64"},
           {"internalType":"uint64","name":"paidAt","type":"uint64"},
@@ -93,7 +92,6 @@ const CLAIM_ABI = [
           {"internalType":"uint8","name":"incidentType","type":"uint8"},
           {"internalType":"uint128","name":"finalCapAmount","type":"uint128"},
           {"internalType":"string","name":"adjusterNotes","type":"string"},
-          {"internalType":"bool","name":"isCapLocked","type":"bool"},
           {"internalType":"uint128","name":"quoteAmount","type":"uint128"},
           {"internalType":"string","name":"quoteRef","type":"string"},
           {"internalType":"address","name":"quoteCurrency","type":"address"},
@@ -144,7 +142,7 @@ const CLAIM_ABI = [
       {"indexed":false,"internalType":"address","name":"adjuster","type":"address"},
       {"indexed":false,"internalType":"string","name":"adjusterNotes","type":"string"}
     ],
-    "name":"SeverityFinalized",
+    "name":"SeveritySubmitted",
     "type":"event"
   },
   {
@@ -237,7 +235,7 @@ function parseGasInputs(prefix) {
 }
 
 const el = (id) => document.getElementById(id);
-const STATUS = ["Submitted","SeverityProposed","SeverityFinalized","QuoteSubmitted","PayoutApproved","Denied","Paid","Closed"];
+const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","Paid","Closed"];
 const INCIDENT = ["Collision","Theft","Vandalism","Weather","Other"];
 
 function assert(cond, msg) { if (!cond) throw new Error(msg || "Assertion failed"); }
@@ -511,7 +509,7 @@ async function submitAdjusterSeverity() {
     tx = await method.send(sendOpts);
     el("insuranceTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
-    el("claimResult").innerHTML = renderClaim(updated);
+    el("insuranceResult").innerHTML = renderClaimToUser(updated);
   } catch (err) {
     el("insuranceTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
@@ -563,7 +561,7 @@ async function submitShopQuote() {
     tx = await method.send(sendOpts);
     el("quoteTx").innerHTML = `Shop quote submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
-    el("claimResult").innerHTML = renderClaim(updated);
+    el("quoteResult").innerHTML = renderClaimToUser(updated);
   } catch (err) {
     el("quoteTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
@@ -587,8 +585,7 @@ function renderClaim(c) {
     "Payee": c.payee ?? c[12],
     "Status": STATUS[Number(c.status ?? c[13]) || 0],
     "Submitted At": tsToISO(c.submittedAt ?? c[14]),
-    "Severity Proposed At": tsToISO(c.severityProposedAt ?? c[15]),
-    "Severity Finalized At": tsToISO(c.severityFinalizedAt ?? c[16]),
+    "Severity Submitted At": tsToISO(c.severitySubmittedAt ?? c[15]),
     "Quote Submitted At": tsToISO(c.quoteSubmittedAt ?? c[17]),
     "Approved At": tsToISO(c.approvedAt ?? c[18]),
     "Paid At": tsToISO(c.paidAt ?? c[19]),
