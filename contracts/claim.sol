@@ -93,11 +93,9 @@ contract Claim {
         // Repair quote
         uint128 quoteAmount;
         string  quoteRef;
-        address quoteCurrency;
 
         // Payout planning & settlement
         uint128 approvedAmount;
-        address payoutCurrency;
         uint256 escrowId;
         bool    payoutToShop;
         bytes32 payoutTxRef;
@@ -118,8 +116,8 @@ contract Claim {
     event AdjusterAssigned(bytes8 indexed claimCode, address indexed adjuster);
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
     event SeveritySubmitted(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
-    event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef, address quoteCurrency);
-    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address payoutCurrency, uint256 escrowId, bool toShop);
+    event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef);
+    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, uint256 escrowId, bool toShop);
     event ClaimDenied(bytes8 indexed claimCode, uint8 reasonCode);
     event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount, bytes32 payoutTxRef);
     event ClaimClosed(bytes8 indexed claimCode);
@@ -257,7 +255,6 @@ contract Claim {
         bytes8  claimCode,
         uint128 quoteAmount,
         string calldata quoteRef,
-        address quoteCurrency
     ) external onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         // require(
@@ -268,11 +265,10 @@ contract Claim {
 
         c.quoteAmount      = quoteAmount;
         c.quoteRef         = quoteRef;
-        c.quoteCurrency    = quoteCurrency;
         c.quoteSubmittedAt = uint64(block.timestamp);
         c.status           = Status.QuoteSubmitted;
 
-        emit QuoteSubmitted(claimCode, c.shop, quoteAmount, quoteRef, quoteCurrency);
+        emit QuoteSubmitted(claimCode, c.shop, quoteAmount, quoteRef);
     }
 
     // Adjuster (or admin) approves payout
@@ -280,7 +276,6 @@ contract Claim {
         bytes8  claimCode,
         address payee,
         uint128 amount,
-        address payoutCurrency,
         uint256 escrowId,
         bool    payoutToShop
     ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
@@ -296,14 +291,13 @@ contract Claim {
         // amount = amount - c.policyDeductible;
 
         c.approvedAmount = amount;
-        c.payoutCurrency = payoutCurrency;
         c.escrowId       = escrowId;
         c.payoutToShop   = payoutToShop;
         c.payee          = payee == address(0) ? c.claimant : payee;
         c.approvedAt     = uint64(block.timestamp);
         c.status         = Status.PayoutApproved;
 
-        emit PayoutApproved(claimCode, c.payee, amount, payoutCurrency, escrowId, payoutToShop);
+        emit PayoutApproved(claimCode, c.payee, amount, escrowId, payoutToShop);
     }
 
     // Admin records payment settlement tx/hash

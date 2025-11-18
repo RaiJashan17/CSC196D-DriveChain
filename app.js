@@ -94,9 +94,7 @@ const CLAIM_ABI = [
           {"internalType":"string","name":"adjusterNotes","type":"string"},
           {"internalType":"uint128","name":"quoteAmount","type":"uint128"},
           {"internalType":"string","name":"quoteRef","type":"string"},
-          {"internalType":"address","name":"quoteCurrency","type":"address"},
           {"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-          {"internalType":"address","name":"payoutCurrency","type":"address"},
           {"internalType":"uint256","name":"escrowId","type":"uint256"},
           {"internalType":"bool","name":"payoutToShop","type":"bool"},
           {"internalType":"bytes32","name":"payoutTxRef","type":"bytes32"}
@@ -169,7 +167,6 @@ const CLAIM_ABI = [
       { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
       { "internalType":"uint128", "name":"amount",    "type":"uint128" },
       { "internalType":"string",  "name":"quoteRef",  "type":"string"  },
-      { "internalType":"address", "name":"currency",  "type":"address" }
     ],
     "name":"submitRepairQuote",
     "outputs":[],
@@ -183,7 +180,6 @@ const CLAIM_ABI = [
       {"indexed":true,"internalType":"address","name":"shop","type":"address"},
       {"indexed":false,"internalType":"uint128","name":"quoteAmount","type":"uint128"},
       {"indexed":false,"internalType":"string","name":"quoteRef","type":"string"},
-      {"indexed":false,"internalType":"address","name":"quoteCurrency","type":"address"}
     ],
     "name":"QuoteSubmitted",
     "type":"event"
@@ -522,7 +518,6 @@ async function submitShopQuote() {
   const shopAddr = el("shopAddress").value.trim();
   const quoteAmount = el("quoteAmount").value.trim();
   const quoteRef    = el("quoteRef").value.trim();
-  const quoteCurrency = "0x0000000000000000000000000000000000000000";//el("quoteCurrency").value.trim() || "0x0000000000000000000000000000000000000000"; // default value
 
   const code = asciiToBytes8(codeStr);
   assert(shopAddr, "Provide a valid shop address");
@@ -546,7 +541,7 @@ async function submitShopQuote() {
     }
     let tx = await method.send(sendOpts);
     method = claim.methods.submitRepairQuote(
-      code, quoteAmount, String(quoteRef), quoteCurrency
+      code, quoteAmount, String(quoteRef)
     );
     try { await method.call({ from: account, ...(parseGasInputs("quote").value ? { value: parseGasInputs("quote").value } : {}) }); } catch (dryErr) { throw dryErr; }
     sendOpts = { from: account, ...parseGasInputs("quote") };
@@ -599,9 +594,7 @@ function renderClaim(c) {
     "Cap Locked": (c.isCapLocked ?? c[27]) ? "true" : "false",
     "Quote Amount": String(c.quoteAmount ?? c[28]),
     "Quote Ref": c.quoteRef ?? c[29],
-    "Quote Currency": c.quoteCurrency ?? c[30],
     "Approved Amount": String(c.insuranceAmount ?? c[31]),
-    "Payout Currency": c.payoutCurrency ?? c[32],
     "Escrow ID": String(c.escrowId ?? c[33]),
     "Payout To Shop": (c.payoutToShop ?? c[34]) ? "true" : "false",
     "Payout Tx Ref": (c.payoutTxRef ?? c[35])
