@@ -34,14 +34,13 @@ contract Claim {
 
     // ===== Enums =====
     enum Status {
-        Submitted,          // 0
-        SeverityProposed,   // 1
-        SeverityFinalized,  // 2
-        QuoteSubmitted,     // 3
-        PayoutApproved,     // 4
-        Denied,             // 5
-        Paid,               // 6
-        Closed              // 7
+        Submitted,          
+        SeveritySubmitted,  
+        QuoteSubmitted,     
+        PayoutApproved,     
+        Denied,             
+        Paid,               
+        Closed              
     }
 
     enum IncidentType { 
@@ -168,8 +167,7 @@ contract Claim {
         ClaimData storage c = _claims[claimCode];
         require(
             c.status == Status.Submitted || 
-            c.status == Status.SeverityProposed || 
-            c.status == Status.SeverityFinalized, 
+            c.status == Status.SeveritySubmitted, 
             "too late to set shop"
         );
         c.shop = shop;
@@ -242,7 +240,7 @@ contract Claim {
     ) external onlyAdjuster(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
-            c.status == Status.SeverityProposed || c.status == Status.SeverityFinalized, 
+            c.status == Status.Submitted || c.status == Status.SeveritySubmitted, 
             "bad status"
         );
         require(finalCapAmount > 0, "cap=0");
@@ -250,7 +248,7 @@ contract Claim {
         c.finalCapAmount      = finalCapAmount;
         c.adjusterNotes       = adjusterNotes;
         c.severityFinalizedAt = uint64(block.timestamp);
-        c.status              = Status.SeverityFinalized;
+        c.status              = Status.SeveritySubmitted;
 
         emit SeverityFinalized(claimCode, finalCapAmount, c.adjuster, adjusterNotes);
     }
@@ -261,10 +259,10 @@ contract Claim {
         uint128 quoteAmount,
         string calldata quoteRef,
         address quoteCurrency
-    ) external onlyShopOrClaimant(claimCode) onlyExisting(claimCode) {
+    ) external onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
-            c.status == Status.SeverityFinalized || c.status == Status.QuoteSubmitted, 
+            c.status == Status.SeveritySubmitted || c.status == Status.QuoteSubmitted, 
             "bad status"
         );
         require(quoteAmount > 0, "quote=0");
@@ -326,8 +324,7 @@ contract Claim {
         ClaimData storage c = _claims[claimCode];
         require(
             c.status == Status.Submitted ||
-            c.status == Status.SeverityProposed ||
-            c.status == Status.SeverityFinalized ||
+            c.status == Status.SeveritySubmitted ||
             c.status == Status.QuoteSubmitted,
             "too late"
         );

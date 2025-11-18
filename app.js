@@ -472,12 +472,12 @@ async function submitAdjusterSeverity() {
   const codeStr    = el("claimCode").value.trim();
   const insuranceAddr = el("insuranceAddress").value.trim();
   const insuranceAmount = el("insuranceAmount").value.trim();
-  const insurancRef    = el("insuranceRef").value.trim();
+  const insuranceRef    = el("insuranceRef").value.trim();
 
   const code = asciiToBytes8(codeStr);
   assert(insuranceAddr, "Provide a valid adjuster address");
   assert(insuranceAmount, "Provide a valid adjuster amount");
-  assert(insurancRef, "Provide adjuster reference notes");
+  assert(insuranceRef, "Provide adjuster reference notes");
 
   el("insuranceTx").textContent = "Submitting transaction…";
   try {
@@ -496,7 +496,7 @@ async function submitAdjusterSeverity() {
     }
     let tx = await method.send(sendOpts);
     method = claim.methods.adjusterConfirmSeverity(
-      code, insuranceAmount, String(quoteRef)
+      code, insuranceAmount, String(insuranceRef)
     );
     try { await method.call({ from: account, ...(parseGasInputs("insurance").value ? { value: parseGasInputs("insurance").value } : {}) }); } catch (dryErr) { throw dryErr; }
     sendOpts = { from: account, ...parseGasInputs("insurance") };
@@ -509,7 +509,7 @@ async function submitAdjusterSeverity() {
       }
     }
     tx = await method.send(sendOpts);
-    el("quoteTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
+    el("insuranceTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
     el("claimResult").innerHTML = renderClaim(updated);
   } catch (err) {
