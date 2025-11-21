@@ -61,47 +61,53 @@ const CLAIM_ABI = [
     "type":"function"
   },
   {
-    "inputs":[{"internalType":"bytes8","name":"claimCode","type":"bytes8"}],
-    "name":"getClaim",
-    "outputs":[
-      {
-        "components":[
-          {"internalType":"bytes8","name":"claimCode","type":"bytes8"},
-          {"internalType":"address","name":"claimant","type":"address"},
-          {"internalType":"uint64","name":"createdAt","type":"uint64"},
-          {"internalType":"uint256","name":"policyId","type":"uint256"},
-          {"internalType":"address","name":"policyHolder","type":"address"},
-          {"internalType":"uint64","name":"policyEffectiveAt","type":"uint64"},
-          {"internalType":"uint64","name":"policyExpiresAt","type":"uint64"},
-          {"internalType":"uint128","name":"policyMaxCoverage","type":"uint128"},
-          {"internalType":"uint128","name":"policyDeductible","type":"uint128"},
-          {"internalType":"string","name":"policyDetails","type":"string"},
-          {"internalType":"address","name":"adjuster","type":"address"},
-          {"internalType":"address","name":"shop","type":"address"},
-          {"internalType":"address","name":"payee","type":"address"},
-          {"internalType":"uint8","name":"status","type":"uint8"},
-          {"internalType":"uint64","name":"submittedAt","type":"uint64"},
-          {"internalType":"uint64","name":"severitySubmittedAt","type":"uint64"},
-          {"internalType":"uint64","name":"quoteSubmittedAt","type":"uint64"},
-          {"internalType":"uint64","name":"approvedAt","type":"uint64"},
-          {"internalType":"uint64","name":"paidAt","type":"uint64"},
-          {"internalType":"uint64","name":"closedAt","type":"uint64"},
-          {"internalType":"uint64","name":"incidentAt","type":"uint64"},
-          {"internalType":"string","name":"incidentAddress","type":"string"},
-          {"internalType":"string","name":"description","type":"string"},
-          {"internalType":"uint8","name":"incidentType","type":"uint8"},
-          {"internalType":"uint128","name":"finalCapAmount","type":"uint128"},
-          {"internalType":"string","name":"adjusterNotes","type":"string"},
-          {"internalType":"uint128","name":"quoteAmount","type":"uint128"},
-          {"internalType":"string","name":"quoteRef","type":"string"},
-          {"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-          {"internalType":"uint256","name":"escrowId","type":"uint256"},
-          {"internalType":"bool","name":"payoutToShop","type":"bool"},
-          {"internalType":"bytes32","name":"payoutTxRef","type":"bytes32"}
-        ],
-        "internalType":"struct Claim.ClaimData",
-        "name":"",
-        "type":"tuple"
+  "inputs":[{"internalType":"bytes8","name":"claimCode","type":"bytes8"}],
+  "name":"getClaim",
+  "outputs":[
+    {
+      "components":[
+        {"internalType":"bytes8","name":"claimCode","type":"bytes8"},
+        {"internalType":"address","name":"claimant","type":"address"},
+        {"internalType":"uint64","name":"createdAt","type":"uint64"},
+
+        {"internalType":"uint256","name":"policyId","type":"uint256"},
+        {"internalType":"address","name":"policyHolder","type":"address"},
+        {"internalType":"uint64","name":"policyEffectiveAt","type":"uint64"},
+        {"internalType":"uint64","name":"policyExpiresAt","type":"uint64"},
+        {"internalType":"uint128","name":"policyMaxCoverage","type":"uint128"},
+        {"internalType":"uint128","name":"policyDeductible","type":"uint128"},
+        {"internalType":"string","name":"policyDetails","type":"string"},
+
+        {"internalType":"address","name":"adjuster","type":"address"},
+        {"internalType":"address","name":"shop","type":"address"},
+        {"internalType":"address","name":"payee","type":"address"},
+
+        {"internalType":"uint8","name":"status","type":"uint8"},
+        {"internalType":"uint64","name":"submittedAt","type":"uint64"},
+        {"internalType":"uint64","name":"severitySubmittedAt","type":"uint64"},
+        {"internalType":"uint64","name":"quoteSubmittedAt","type":"uint64"},
+        {"internalType":"uint64","name":"approvedAt","type":"uint64"},
+        {"internalType":"uint64","name":"paidAt","type":"uint64"},
+
+        {"internalType":"uint64","name":"incidentAt","type":"uint64"},
+        {"internalType":"string","name":"incidentAddress","type":"string"},
+        {"internalType":"string","name":"description","type":"string"},
+        {"internalType":"uint8","name":"incidentType","type":"uint8"},
+
+        {"internalType":"uint128","name":"finalCapAmount","type":"uint128"},
+        {"internalType":"string","name":"adjusterNotes","type":"string"},
+
+        {"internalType":"uint128","name":"quoteAmount","type":"uint128"},
+        {"internalType":"string","name":"quoteRef","type":"string"},
+
+        {"internalType":"uint128","name":"approvedAmount","type":"uint128"},
+        {"internalType":"address","name":"escrowAddress;","type":"address"},
+        {"internalType":"bool","name":"payoutToShop","type":"bool"},
+        {"internalType":"bytes32","name":"payoutTxRef","type":"bytes32"}
+      ],
+      "internalType":"struct Claim.ClaimData",
+      "name":"",
+      "type":"tuple"
       }
     ],
     "stateMutability":"view",
@@ -202,6 +208,50 @@ const CLAIM_ABI = [
   ],
   "name": "ShopAssigned",
   "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+      { "internalType":"address", "name":"payee",    "type":"address" },
+      { "internalType":"uint128",  "name":"amount",  "type":"uint128"  },
+      { "internalType":"address",  "name":"escrowAddress",  "type":"address"  },
+      { "internalType":"bool",  "name":"payoutToShop",  "type":"bool"  },
+    ],
+    "name":"approvePayout",
+    "outputs":[],
+    "stateMutability":"nonpayable",
+    "type":"function"
+  },
+  {
+    "anonymous":false,
+    "inputs":[
+      {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
+      {"indexed":true,"internalType":"address","name":"payee","type":"address"},
+      {"indexed":false,"internalType":"uint128","name":"approvedAmount","type":"uint128"},
+      {"indexed":true,"internalType":"address","name":"escrowAddress","type":"address"},
+      {"indexed":false,"internalType":"bool","name":"toShop","type":"bool"},
+    ],
+    "name":"PayoutApproved",
+    "type":"event"
+  },
+  {
+    "inputs": [
+      { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
+      { "internalType":"string", "name":"reason",    "type":"string" },
+    ],
+    "name":"denyClaim",
+    "outputs":[],
+    "stateMutability":"nonpayable",
+    "type":"function"
+  },
+  {
+    "anonymous":false,
+    "inputs":[
+      {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
+      {"indexed":false,"internalType":"string","name":"reason","type":"string"},
+    ],
+    "name":"ClaimDenied",
+    "type":"event"
   }
 ];
 
@@ -505,7 +555,7 @@ async function submitAdjusterSeverity() {
     tx = await method.send(sendOpts);
     el("insuranceTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
-    el("insuranceResult").innerHTML = renderClaimToUser(updated);
+    el("insuranceResult").innerHTML = renderClaim(updated);
   } catch (err) {
     el("insuranceTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
@@ -556,9 +606,81 @@ async function submitShopQuote() {
     tx = await method.send(sendOpts);
     el("quoteTx").innerHTML = `Shop quote submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
-    el("quoteResult").innerHTML = renderClaimToUser(updated);
+    el("quoteResult").innerHTML = renderClaim(updated);
   } catch (err) {
     el("quoteTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+    console.error(err);
+  }
+}
+
+async function approvePayout() {
+  requireContractsReady();
+  const codeStr    = el("claimCode").value.trim();
+  const payeeAddr = el("payeeAddress").value.trim();
+  const amount    = el("amount").value.trim();
+  const escrowAddress       = el("escrowAddress").value.trim();
+  const payoutToShop    = el("payoutToShop").value;
+
+  const code = asciiToBytes8(codeStr);
+  assert(payeeAddr, "Provide a valid payee address");
+  assert(escrowAddress, "Provide a valid escrowAddress");
+  assert(amount, "Provide a valid amount");
+
+  el("approveTx").textContent = "Submitting transaction…";
+  try {
+    const method = claim.methods.approvePayout(
+      code, payeeAddr, amount, escrowAddress, payoutToShop,
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    let sendOpts = { from: account, ...parseGasInputs("approve") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    const tx = await method.send(sendOpts);
+    el("approveTx").innerHTML = `Payout Approved. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(code).call();
+    el("approveResult").innerHTML = renderClaim(updated);
+  } catch (err) {
+    el("approveTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+    console.error(err);
+  }
+}
+
+async function denyClaim() {
+  requireContractsReady();
+  console.log("here");
+  const codeStr    = el("claimCode").value.trim();
+  const reasonCode    = el("reason").value.trim();
+
+  const code = asciiToBytes8(codeStr);
+  assert(reasonCode, "Provide a reason");
+
+  el("approveTx").textContent = "Submitting transaction…";
+  try {
+    const method = claim.methods.denyClaim(
+      code, reasonCode
+    );
+    try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    let sendOpts = { from: account, ...parseGasInputs("approve") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    const tx = await method.send(sendOpts);
+    el("approveTx").innerHTML = `Claim denied. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(code).call();
+    el("approveResult").innerHTML = renderClaim(updated);
+  } catch (err) {
+    el("approveTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
   }
 }
@@ -581,23 +703,21 @@ function renderClaim(c) {
     "Status": STATUS[Number(c.status ?? c[13]) || 0],
     "Submitted At": tsToISO(c.submittedAt ?? c[14]),
     "Severity Submitted At": tsToISO(c.severitySubmittedAt ?? c[15]),
-    "Quote Submitted At": tsToISO(c.quoteSubmittedAt ?? c[17]),
-    "Approved At": tsToISO(c.approvedAt ?? c[18]),
-    "Paid At": tsToISO(c.paidAt ?? c[19]),
-    "Closed At": tsToISO(c.closedAt ?? c[20]),
-    "Incident At": tsToISO(c.incidentAt ?? c[21]),
-    "Incident Address": c.incidentAddress ?? c[22],
-    "Incident Description": c.description ?? c[23],
-    "Incident Type": INCIDENT[Number(c.incidentType ?? c[24]) || 0],
-    "Final Cap Amount": String(c.finalCapAmount ?? c[25]),
-    "Adjuster Notes": c.adjusterNotes ?? c[26],
-    "Cap Locked": (c.isCapLocked ?? c[27]) ? "true" : "false",
-    "Quote Amount": String(c.quoteAmount ?? c[28]),
-    "Quote Ref": c.quoteRef ?? c[29],
-    "Approved Amount": String(c.insuranceAmount ?? c[31]),
-    "Escrow ID": String(c.escrowId ?? c[33]),
-    "Payout To Shop": (c.payoutToShop ?? c[34]) ? "true" : "false",
-    "Payout Tx Ref": (c.payoutTxRef ?? c[35])
+    "Quote Submitted At": tsToISO(c.quoteSubmittedAt ?? c[16]),
+    "Approved At": tsToISO(c.approvedAt ?? c[17]),
+    "Paid At": tsToISO(c.paidAt ?? c[18]),
+    "Incident At": tsToISO(c.incidentAt ?? c[19]),
+    "Incident Address": c.incidentAddress ?? c[20],
+    "Incident Description": c.description ?? c[21],
+    "Incident Type": INCIDENT[Number(c.incidentType ?? c[22]) || 0],
+    "Final Cap Amount": String(c.finalCapAmount ?? c[23]),
+    "Adjuster Notes": c.adjusterNotes ?? c[24],
+    "Quote Amount": String(c.quoteAmount ?? c[25]),
+    "Quote Ref": c.quoteRef ?? c[26],
+    "Approved Amount": String(c.approvedAmount ?? c[27]),
+    "Escrow Address": String(c.escrowAddress ?? c[28]),
+    "Payout To Shop": (c.payoutToShop ?? c[29]) ? "true" : "false",
+    "Payout Tx Ref": c.payoutTxRef ?? c[30],
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
@@ -619,14 +739,13 @@ function renderClaimToUser(c) {
     "Payee": c.payee ?? c[12],
     "Status": STATUS[Number(c.status ?? c[13]) || 0],
     "Submitted At": tsToISO(c.submittedAt ?? c[14]),
-    "Paid At": tsToISO(c.paidAt ?? c[19]),
-    "Closed At": tsToISO(c.closedAt ?? c[20]),
-    "Incident At": tsToISO(c.incidentAt ?? c[21]),
-    "Incident Address": c.incidentAddress ?? c[22],
-    "Incident Description": c.description ?? c[23],
-    "Incident Type": INCIDENT[Number(c.incidentType ?? c[24]) || 0],
-    "Quote Amount": String(c.quoteAmount ?? c[28]),
-    "Approved Amount": String(c.insuranceAmount ?? c[31]),
+    "Paid At": tsToISO(c.paidAt ?? c[18]),
+    "Incident At": tsToISO(c.incidentAt ?? c[19]),
+    "Incident Address": c.incidentAddress ?? c[20],
+    "Incident Description": c.description ?? c[21],
+    "Incident Type": INCIDENT[Number(c.incidentType ?? c[22]) || 0],
+    "Quote Amount": String(c.quoteAmount ?? c[25]),
+    "Approved Amount": String(c.approvedAmount ?? c[27]),
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
@@ -658,5 +777,11 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   el("submitRepairQuoteBtn").addEventListener("click", async () => {
     try { await submitShopQuote(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("approveClaimBtn").addEventListener("click", async () => {
+    try { await approvePayout(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("denyClaimBtn").addEventListener("click", async () => {
+    try { await denyClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
 });
