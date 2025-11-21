@@ -39,8 +39,7 @@ contract Claim {
         QuoteSubmitted,     
         PayoutApproved,     
         Denied,             
-        Paid,               
-        Closed              
+        Paid            
     }
 
     enum IncidentType { 
@@ -78,7 +77,6 @@ contract Claim {
         uint64  quoteSubmittedAt;
         uint64  approvedAt;
         uint64  paidAt;
-        uint64  closedAt;
 
         // Incident metadata
         uint64       incidentAt;
@@ -96,7 +94,7 @@ contract Claim {
 
         // Payout planning & settlement
         uint128 approvedAmount;
-        uint256 escrowId;
+        address escrowAddress;
         bool    payoutToShop;
         bytes32 payoutTxRef;
     }   
@@ -117,10 +115,9 @@ contract Claim {
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
     event SeveritySubmitted(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
     event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef);
-    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, uint256 escrowId, bool toShop);
-    event ClaimDenied(bytes8 indexed claimCode, uint8 reasonCode);
+    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address indexed escrowAddress, bool toShop);
+    event ClaimDenied(bytes8 indexed claimCode, string reason);
     event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount, bytes32 payoutTxRef);
-    event ClaimClosed(bytes8 indexed claimCode);
 
     modifier onlyExisting(bytes8 claimCode) {
         require(_claims[claimCode].claimCode != bytes8(0), "no such claim");
@@ -143,9 +140,9 @@ contract Claim {
         require(msg.sender == c.adjuster || msg.sender == owner, "not adjuster/admin");
         _;
     }
-    modifier onlyShopOrClaimant(bytes8 claimCode) {
+    modifier onlyShopOrAdmin(bytes8 claimCode) {
         ClaimData storage c = _claims[claimCode];
-        require(msg.sender == c.shop || msg.sender == c.claimant, "not shop/claimant");
+        require(msg.sender == c.shop || msg.sender == owner, "not shop/admin");
         _;
     }
 
@@ -153,7 +150,7 @@ contract Claim {
         policy = IPolicyReader(policyRegistry);
     }
 
-    function setAdjuster(bytes8 claimCode, address adjuster) external onlyAdmin onlyExisting(claimCode) {
+    function setAdjuster(bytes8 claimCode, address adjuster) external onlyExisting(claimCode) {
         require(adjuster != address(0), "zero adjuster");
         _claims[claimCode].adjuster = adjuster;
         emit AdjusterAssigned(claimCode, adjuster);
@@ -168,12 +165,6 @@ contract Claim {
             "too late to set shop"
         );
         c.shop = shop;
-        emit ShopAssigned(claimCode, shop);
-    }
-
-    function adminSetShop(bytes8 claimCode, address shop) external onlyAdmin onlyExisting(claimCode) {
-        require(shop != address(0), "zero shop");
-        _claims[claimCode].shop = shop;
         emit ShopAssigned(claimCode, shop);
     }
 
@@ -234,11 +225,11 @@ contract Claim {
         bytes8  claimCode,
         uint128 finalCapAmount,
         string calldata adjusterNotes
-    ) external onlyAdjuster(claimCode) onlyExisting(claimCode) {
+    ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
             c.status == Status.Submitted || c.status == Status.SeveritySubmitted, 
-            "bad status"
+            "waiting for submission"
         );
         require(finalCapAmount > 0, "cap=0");
 
@@ -254,13 +245,13 @@ contract Claim {
     function submitRepairQuote(
         bytes8  claimCode,
         uint128 quoteAmount,
-        string calldata quoteRef,
-    ) external onlyExisting(claimCode) {
+        string calldata quoteRef
+    ) external onlyShopOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
-        // require(
-        //     c.status == Status.SeveritySubmitted || c.status == Status.QuoteSubmitted, 
-        //     "bad status"
-        // );
+        require(
+            c.status == Status.SeveritySubmitted || c.status == Status.QuoteSubmitted, 
+            "waiting for adjuster submission"
+        );
         require(quoteAmount > 0, "quote=0");
 
         c.quoteAmount      = quoteAmount;
@@ -276,34 +267,33 @@ contract Claim {
         bytes8  claimCode,
         address payee,
         uint128 amount,
-        uint256 escrowId,
+        address escrowAddress,
         bool    payoutToShop
     ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
-        require(c.status == Status.QuoteSubmitted, "bad status");
+        require(c.status == Status.QuoteSubmitted, "waiting for quote");
         require(amount > 0, "amount=0");
         require(amount <= c.finalCapAmount, "over final cap");
         require(amount <= c.quoteAmount, "over quote");
         require(amount <= c.policyMaxCoverage, "over policy coverage");
 
-        // If you want to *automatically* apply deductible:
-        // require(c.policyDeductible <= amount, "below deductible");
-        // amount = amount - c.policyDeductible;
+        require(c.policyDeductible <= amount, "below deductible");
+        amount = amount - c.policyDeductible;
 
         c.approvedAmount = amount;
-        c.escrowId       = escrowId;
+        c.escrowAddress      = escrowAddress;
         c.payoutToShop   = payoutToShop;
         c.payee          = payee == address(0) ? c.claimant : payee;
         c.approvedAt     = uint64(block.timestamp);
         c.status         = Status.PayoutApproved;
 
-        emit PayoutApproved(claimCode, c.payee, amount, escrowId, payoutToShop);
+        emit PayoutApproved(claimCode, c.payee, amount, escrowAddress, payoutToShop);
     }
 
     // Admin records payment settlement tx/hash
     function markPaid(bytes8 claimCode, bytes32 payoutTxRef) external onlyAdmin onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
-        require(c.status == Status.PayoutApproved, "bad status");
+        require(c.status == Status.PayoutApproved, "waiting for payout approval");
 
         c.payoutTxRef = payoutTxRef;
         c.paidAt      = uint64(block.timestamp);
@@ -313,7 +303,7 @@ contract Claim {
     }
 
     // Adjuster or admin can deny before payout approval
-    function denyClaim(bytes8 claimCode, uint8 reasonCode) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
+    function denyClaim(bytes8 claimCode, string calldata reason) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
             c.status == Status.Submitted ||
@@ -322,16 +312,7 @@ contract Claim {
             "too late"
         );
         c.status = Status.Denied;
-        emit ClaimDenied(claimCode, reasonCode);
-    }
-
-    // Admin closes after Paid or Denied
-    function closeClaim(bytes8 claimCode) external onlyAdmin onlyExisting(claimCode) {
-        ClaimData storage c = _claims[claimCode];
-        require(c.status == Status.Paid || c.status == Status.Denied, "must be Paid or Denied");
-        c.closedAt = uint64(block.timestamp);
-        c.status   = Status.Closed;
-        emit ClaimClosed(claimCode);
+        emit ClaimDenied(claimCode, reason);
     }
 
     function getClaim(bytes8 claimCode) external view returns (ClaimData memory) {

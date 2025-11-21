@@ -176,12 +176,12 @@
         <input id="expiresAt" type="datetime-local" />
       </div>
       <div>
-        <label for="maxCoverage">Max Coverage (USD)</label>
-        <input id="maxCoverage" type="text" placeholder="e.g., 1000000" />
+        <label for="maxCoverage">Max Coverage</label>
+        <input id="maxCoverage" type="text" placeholder="e.g., 100 ETH" />
       </div>
       <div>
-        <label for="deductible">Deductible (USD)</label>
-        <input id="deductible" type="text" placeholder="e.g., 2000" />
+        <label for="deductible">Deductible</label>
+        <input id="deductible" type="text" placeholder="e.g., 20 ETH" />
       </div>
     </div>
     <div style="width: 97%;">
@@ -363,6 +363,61 @@
         </div>
       </details>
       <div id="quoteResult" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5) Approve or Deny Claim</h2>
+    <div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+        <div>
+          <label for="claimCode">Claim Code (8 chars, Required)</label>
+          <input id="claimCode" maxlength="8" placeholder="A1234567" />
+        </div>
+        <div>
+          <label for="payeeAddress">Payee Address (0x…, Only For Approval)</label>
+          <input id="payeeAddress" class="mono" placeholder="0x..." />
+        </div>
+        <div>
+          <label for="amount">Amount To Pay (Only For Approval)</label>
+          <input id="amount" class="mono" placeholder="10000" />
+        </div>
+        <div>
+          <label for="escrowAddress">Escrow Address For Third Party (Only For Approval)</label>
+          <input id="escrowAddress" placeholder="0x..."></input>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label for="payoutToShop">Payout to Shop (Only For Approval)</label>
+          <input type="checkbox" id="payoutToShop" name="payoutToShop">
+        </div>
+        <div>
+          <label for="reason">Reason For Denial</label>
+          <textarea id="reason" placeholder="Details of Denial"></textarea>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="approveClaimBtn" class="primary">Approve Payout</button>
+        <button id="denyClaimBtn" class="primary">Deny Claim</button>
+      </div>
+      <div id="approveTx" class="small mono muted" style="margin-top:8px"></div>
+      <details style="margin-top:8px">
+        <summary>Advanced (gas / value)</summary>
+        <div style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+          <div>
+            <label for="approveGas">Gas Limit (optional)</label>
+            <input id="approveGas" class="mono" placeholder="auto (estimate)" />
+          </div>
+          <div>
+            <label for="approveGasPrice">Gas Price (gwei, optional)</label>
+            <input id="approveGasPrice" class="mono" placeholder="auto" />
+          </div>
+          <div>
+            <label for="approveValue">Value (wei, optional)</label>
+            <input id="approveValue" class="mono" placeholder="0" />
+          </div>
+        </div>
+      </details>
+      <div id="approveResult" style="margin-top:12px"></div>
     </div>
   </div>
 </body>
