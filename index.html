@@ -382,10 +382,6 @@
           <label for="amount">Amount To Pay (Only For Approval)</label>
           <input id="amount" class="mono" placeholder="10000" />
         </div>
-        <div>
-          <label for="escrowAddress">Escrow Address For Third Party (Only For Approval)</label>
-          <input id="escrowAddress" placeholder="0x..."></input>
-        </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <label for="payoutToShop">Payout to Shop (Only For Approval)</label>
           <input type="checkbox" id="payoutToShop" name="payoutToShop">
@@ -420,6 +416,68 @@
       <div id="approveResult" style="margin-top:12px"></div>
     </div>
   </div>
-</body>
+  <div class="card">
+    <h2>6) Make Claimant Payment or Recieve Money</h2>
+    <div>
+      <!-- 6A: Lookup only -->
+      <div class="row" style="width:97%; align-items:end;">
+        <div>
+          <label for="payLookupCode">Claim Code (8 chars)</label>
+          <input id="payLookupCode" class="mono" maxlength="8" placeholder="A1234567" />
+        </div>
+        <div style="align-self:end; width:50%; margin-top:8px;">
+          <button id="loadPayableClaimBtn" class="primary" type="button" style="height:38px; width:100px; margin-left:15px;">Load Claim</button>
+        </div>
+      </div>
+      <div id="payLookupErr" class="small err" style="margin-top:6px;"></div>
 
+      <!-- 6B: Revealed once a payable claim is loaded -->
+      <div id="paySection" style="display:none; margin-top:10px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:30px; width:97%;">
+          <div>
+            <label for="payClaimCode">Claim Code</label>
+            <input id="payClaimCode" class="mono" readonly />
+          </div>
+          <div>
+            <label for="payPayeeAddress">Payee (Claimant) Address</label>
+            <input id="payPayeeAddress" class="mono" readonly />
+          </div>
+          <div>
+            <label for="payAmount">Approved Amount (wei)</label>
+            <input id="payAmount" class="mono" readonly />
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="payChoiceToShop" style="margin:0;">Pay to Shop?</label>
+            <input type="checkbox" id="payChoiceToShop" disabled />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <button id="reimburseBtn" class="primary" type="button">Reimburse</button>
+          <button id="payShopBtn" class="primary" type="button">Pay to Shop</button>
+        </div>
+
+        <div id="payTx" class="small mono muted" style="margin-top:8px"></div>
+        <details style="margin-top:8px">
+          <summary>Advanced (gas / value)</summary>
+          <div style="margin-top:8px; display:flex; flex-direction:row; width:50%; justify-content:space-between;">
+            <div>
+              <label for="payGas">Gas Limit (optional)</label>
+              <input id="payGas" class="mono" placeholder="auto (estimate)" />
+            </div>
+            <div>
+              <label for="payGasPrice">Gas Price (gwei, optional)</label>
+              <input id="payGasPrice" class="mono" placeholder="auto" />
+            </div>
+            <div>
+              <label for="payValue">Value (wei, optional)</label>
+              <input id="payValue" class="mono" placeholder="(defaults to approved amount)" />
+            </div>
+          </div>
+        </details>
+        <div id="payResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+      
 </html>

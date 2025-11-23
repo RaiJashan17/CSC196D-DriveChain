@@ -101,9 +101,7 @@ const CLAIM_ABI = [
         {"internalType":"string","name":"quoteRef","type":"string"},
 
         {"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-        {"internalType":"address","name":"escrowAddress;","type":"address"},
-        {"internalType":"bool","name":"payoutToShop","type":"bool"},
-        {"internalType":"bytes32","name":"payoutTxRef","type":"bytes32"}
+        {"internalType":"bool","name":"payoutToShop","type":"bool"}
       ],
       "internalType":"struct Claim.ClaimData",
       "name":"",
@@ -214,7 +212,6 @@ const CLAIM_ABI = [
       { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
       { "internalType":"address", "name":"payee",    "type":"address" },
       { "internalType":"uint128",  "name":"amount",  "type":"uint128"  },
-      { "internalType":"address",  "name":"escrowAddress",  "type":"address"  },
       { "internalType":"bool",  "name":"payoutToShop",  "type":"bool"  },
     ],
     "name":"approvePayout",
@@ -228,7 +225,6 @@ const CLAIM_ABI = [
       {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
       {"indexed":true,"internalType":"address","name":"payee","type":"address"},
       {"indexed":false,"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-      {"indexed":true,"internalType":"address","name":"escrowAddress","type":"address"},
       {"indexed":false,"internalType":"bool","name":"toShop","type":"bool"},
     ],
     "name":"PayoutApproved",
@@ -252,6 +248,26 @@ const CLAIM_ABI = [
     ],
     "name":"ClaimDenied",
     "type":"event"
+  },
+  {
+  "inputs": [
+    { "internalType": "bytes8", "name": "claimCode", "type": "bytes8" },
+    { "internalType": "uint8",  "name": "mode",      "type": "uint8" }
+  ],
+  "name": "setPayoutMode",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+  },
+  {
+  "inputs": [
+    { "internalType": "bytes8",  "name": "claimCode",   "type": "bytes8" },
+    { "internalType": "bytes32", "name": "payoutTxRef", "type": "bytes32" }
+  ],
+  "name": "markPaid",
+  "outputs": [],
+  "stateMutability": "payable",
+  "type": "function"
   }
 ];
 
@@ -353,7 +369,10 @@ async function initGanache() {
   sel.addEventListener("change", () => {
     account = sel.value;
     setStatus(account, chainId);
-  });
+    try { el("loadPayableClaimBtn").addEventListener("click", () => loadPaymentInfo()); } catch(_){}
+  try { el("reimburseBtn").addEventListener("click", () => setPaymentModeSafe("reimburse")); } catch(_){}
+  try { el("payShopBtn").addEventListener("click", () => setPaymentModeSafe("shop")); } catch(_){}
+});
   try { chainId = await web3.eth.getChainId(); } catch { chainId = "unknown"; }
   setStatus(account, chainId);
 }
@@ -618,18 +637,16 @@ async function approvePayout() {
   const codeStr    = el("claimCode").value.trim();
   const payeeAddr = el("payeeAddress").value.trim();
   const amount    = el("amount").value.trim();
-  const escrowAddress       = el("escrowAddress").value.trim();
   const payoutToShop    = el("payoutToShop").value;
 
   const code = asciiToBytes8(codeStr);
   assert(payeeAddr, "Provide a valid payee address");
-  assert(escrowAddress, "Provide a valid escrowAddress");
   assert(amount, "Provide a valid amount");
 
   el("approveTx").textContent = "Submitting transaction…";
   try {
     const method = claim.methods.approvePayout(
-      code, payeeAddr, amount, escrowAddress, payoutToShop,
+      code, payeeAddr, amount, payoutToShop,
     );
     try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
     let sendOpts = { from: account, ...parseGasInputs("approve") };
@@ -715,9 +732,7 @@ function renderClaim(c) {
     "Quote Amount": String(c.quoteAmount ?? c[25]),
     "Quote Ref": c.quoteRef ?? c[26],
     "Approved Amount": String(c.approvedAmount ?? c[27]),
-    "Escrow Address": String(c.escrowAddress ?? c[28]),
-    "Payout To Shop": (c.payoutToShop ?? c[29]) ? "true" : "false",
-    "Payout Tx Ref": c.payoutTxRef ?? c[30],
+    "Payout To Shop": (c.payoutToShop ?? c[28]) ? "true" : "false",
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
@@ -748,6 +763,152 @@ function renderClaimToUser(c) {
     "Approved Amount": String(c.approvedAmount ?? c[27]),
   };
   return `<div class="card">${renderKV(kv)}</div>`;
+}
+
+async function loadPaymentInfo() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const sec = el("paySection");
+  if (errEl) errEl.textContent = "";
+  if (sec) sec.style.display = "none";
+
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) {
+    if (errEl) errEl.textContent = "Enter an 8-character claim code.";
+    return;
+  }
+
+  const codeHex = asciiToBytes8(codeStr);
+  let data;
+  try {
+    data = await claim.methods.getClaim(codeHex).call();
+  } catch (e) {
+    if (errEl) errEl.textContent = "Could not load claim from contract.";
+    console.error(e);
+    return;
+  }
+
+  // Extract fields (support both struct & tuple)
+  const status         = Number(data.status ?? data[13] ?? 0);
+  const approvedAt     = Number(data.approvedAt ?? data[17] ?? 0);
+  const paidAt         = Number(data.paidAt ?? data[18] ?? 0);
+  const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
+  const payee          = data.payee ?? data[12] ?? "";
+  const claimCodeB8    = data.claimCode ?? data[0];
+  const payoutToShop   = !!(data.payoutToShop ?? data[28]);
+
+  // Ready to be paid?
+  if (status !== 3 || !approvedAt || paidAt || !payee || approvedAmount === "0") {
+    if (errEl) errEl.textContent = "This claim is not ready to be paid (Step 5 approval required).";
+    return;
+  }
+
+  // Fill UI
+  const codeAscii = bytes8ToAscii(claimCodeB8);
+  if (el("payClaimCode"))     el("payClaimCode").value = codeAscii;
+  if (el("payPayeeAddress"))  el("payPayeeAddress").value = payee;
+  if (el("payAmount"))        el("payAmount").value = approvedAmount;
+  if (el("payChoiceToShop"))  el("payChoiceToShop").checked = payoutToShop;
+
+  if (sec) sec.style.display = "";
+}
+
+async function payShop() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) { if (errEl) errEl.textContent = "Enter an 8-character claim code."; return; }
+
+  const codeHex = asciiToBytes8(codeStr);
+
+  // Load claim to get fields we need
+  const data = await claim.methods.getClaim(codeHex).call();
+  const claimCodeB8    = data.claimCode ?? data[0];
+  const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
+
+  // 0) Optional: allow user override of value via the "Advanced" pay fields
+  const adv = parseGasInputs("pay");          // uses payGas/payGasPrice/payValue inputs
+  const valueWei = adv.value || approvedAmount;
+  const txref = "0x" + "0".repeat(64);        // bytes32 zero
+
+  // 1) Claimant sets mode to Shop (mode = 0). If caller is not claimant, contract will revert.
+  el("payTx").textContent = "Setting payout mode to Shop…";
+  {
+    const method = claim.methods.setPayoutMode(claimCodeB8, 0);
+    try { await method.call({ from: account }); } catch (dry) { throw dry; }
+    let sendOpts = { from: account, ...parseGasInputs("pay") };
+    if (!sendOpts.gas) {
+      try { const est = await method.estimateGas({ from: account }); sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25)); }
+      catch { sendOpts.gas = 1000000; }
+    }
+    const tx = await method.send(sendOpts);
+    el("payTx").innerHTML = `Payout Mode = Shop. TX: <span class="mono">${tx.transactionHash}</span>`;
+  }
+
+  // 2) Execute markPaid with value (insurer or claimant path is enforced on-chain)
+  el("payTx").textContent = "Submitting payment…";
+  {
+    const method = claim.methods.markPaid(claimCodeB8, txref);
+    let sendOpts = { from: account, value: valueWei, ...parseGasInputs("pay") };
+    if (!sendOpts.gas) {
+      try { const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 }); sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25)); }
+      catch { sendOpts.gas = 1000000; }
+    }
+    const tx = await method.send(sendOpts);
+    el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(codeHex).call();       // <-- use codeHex (not "code")
+    el("payResult").innerHTML = renderClaim(updated);
+  }
+}
+
+async function reimburse() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) { if (errEl) errEl.textContent = "Enter an 8-character claim code."; return; }
+
+  const codeHex = asciiToBytes8(codeStr);
+
+  const data = await claim.methods.getClaim(codeHex).call();
+  const claimCodeB8    = data.claimCode ?? data[0];
+  const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
+  const adv = parseGasInputs("pay");
+  const valueWei = adv.value || approvedAmount;
+  const txref = "0x" + "0".repeat(64);
+
+  // Mode = 1 (Reimburse). Only insurer can markPaid in this branch (enforced on-chain).
+  el("payTx").textContent = "Setting payout mode to Reimburse…";
+  {
+    const method = claim.methods.setPayoutMode(claimCodeB8, 1);
+    try { await method.call({ from: account }); } catch (dry) { throw dry; }
+    let sendOpts = { from: account, ...parseGasInputs("pay") };
+    if (!sendOpts.gas) {
+      try { const est = await method.estimateGas({ from: account }); sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25)); }
+      catch { sendOpts.gas = 1000000; }
+    }
+    const tx = await method.send(sendOpts);
+    el("payTx").innerHTML = `Payout Mode = Reimburse. TX: <span class="mono">${tx.transactionHash}</span>`;
+  }
+
+  el("payTx").textContent = "Submitting reimburse payment…";
+  {
+    const method = claim.methods.markPaid(claimCodeB8, txref);
+    let sendOpts = { from: account, value: valueWei, ...parseGasInputs("pay") };
+    if (!sendOpts.gas) {
+      try { const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 }); sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25)); }
+      catch { sendOpts.gas = 1000000; }
+    }
+    const tx = await method.send(sendOpts);
+    el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
+    const updated = await claim.methods.getClaim(codeHex).call();
+    el("payResult").innerHTML = renderClaim(updated);
+  }
+}
+
+// Safety wrapper in case setPaymentMode isn't available at runtime
+function setPaymentModeSafe(mode) {
+  try { typeof setPaymentMode === 'function' ? setPaymentMode(mode) : console.warn('setPaymentMode not found'); }
+  catch (e) { console.error(e); }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -783,5 +944,14 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   el("denyClaimBtn").addEventListener("click", async () => {
     try { await denyClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("loadPayableClaimBtn").addEventListener("click", async () => {
+    try { await loadPaymentInfo(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("reimburseBtn").addEventListener("click", async () => {
+    try { await reimburse(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("payShopBtn").addEventListener("click", async () => {
+    try { await payShop(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
 });

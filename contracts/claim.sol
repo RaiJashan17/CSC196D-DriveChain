@@ -94,13 +94,25 @@ contract Claim {
 
         // Payout planning & settlement
         uint128 approvedAmount;
-        address escrowAddress;
         bool    payoutToShop;
-        bytes32 payoutTxRef;
     }   
 
     mapping(bytes8 => ClaimData) private _claims;
     mapping(bytes8 => bool)  private _usedCodes;
+
+    // --- Payout mode & payment tracking (added) ---
+    // 0 = ToShopWithTopUp (insurer -> shop up to approvedAmount; claimant tops up remainder to shop)
+    // 1 = ToClaimant (insurer -> claimant up to approvedAmount)
+    mapping(bytes8 => uint8) public payoutMode;
+
+    // Partial payments tracking
+    mapping(bytes8 => uint128) public insurerPaidToShop;
+    mapping(bytes8 => uint128) public claimantTopUpPaid;
+    mapping(bytes8 => uint128) public insurerPaidToClaimant;
+
+    event PayoutModeSet(bytes8 indexed claimCode, uint8 mode);
+    event PaymentReceived(bytes8 indexed claimCode, address indexed from, string role, uint128 amount, address indexed to);
+
 
     event ClaimSubmitted(
         bytes8  indexed claimCode,
@@ -115,9 +127,9 @@ contract Claim {
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
     event SeveritySubmitted(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
     event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef);
-    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address indexed escrowAddress, bool toShop);
+    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, bool toShop);
     event ClaimDenied(bytes8 indexed claimCode, string reason);
-    event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount, bytes32 payoutTxRef);
+    event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount);
 
     modifier onlyExisting(bytes8 claimCode) {
         require(_claims[claimCode].claimCode != bytes8(0), "no such claim");
@@ -267,7 +279,6 @@ contract Claim {
         bytes8  claimCode,
         address payee,
         uint128 amount,
-        address escrowAddress,
         bool    payoutToShop
     ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
@@ -281,25 +292,128 @@ contract Claim {
         amount = amount - c.policyDeductible;
 
         c.approvedAmount = amount;
-        c.escrowAddress      = escrowAddress;
         c.payoutToShop   = payoutToShop;
         c.payee          = payee == address(0) ? c.claimant : payee;
         c.approvedAt     = uint64(block.timestamp);
         c.status         = Status.PayoutApproved;
 
-        emit PayoutApproved(claimCode, c.payee, amount, escrowAddress, payoutToShop);
+        emit PayoutApproved(claimCode, c.payee, amount, payoutToShop);
     }
 
     // Admin records payment settlement tx/hash
-    function markPaid(bytes8 claimCode, bytes32 payoutTxRef) external onlyAdmin onlyExisting(claimCode) {
+    
+    /// @notice Sets payout mode for a claim.
+    /// 0 = insurer pays approvedAmount to shop, claimant tops up remainder to shop
+    /// 1 = insurer pays approvedAmount to claimant (no on-chain shop payment)
+    function setPayoutMode(bytes8 claimCode, uint8 mode)
+        external
+        onlyExisting(claimCode)
+    {
+        require(mode == 0 || mode == 1, "invalid mode");
         ClaimData storage c = _claims[claimCode];
-        require(c.status == Status.PayoutApproved, "waiting for payout approval");
+        require(msg.sender == c.claimant, "only claimant");
+        require(c.status == Status.PayoutApproved, "not payout-approved");
+        // Disallow switching after payments started
+        require(
+            insurerPaidToShop[claimCode] == 0 &&
+            claimantTopUpPaid[claimCode] == 0 &&
+            insurerPaidToClaimant[claimCode] == 0,
+            "payments started"
+        );
+        payoutMode[claimCode] = mode;
+        emit PayoutModeSet(claimCode, mode);
+    }
 
-        c.payoutTxRef = payoutTxRef;
-        c.paidAt      = uint64(block.timestamp);
-        c.status      = Status.Paid;
 
-        emit ClaimPaid(claimCode, c.payee, c.approvedAmount, payoutTxRef);
+    /// @notice Final settlement step after approvePayout set approvedAmount = min(quoteAmount, finalCapAmount).
+    /// Modes:
+    ///   0 (default): insurer pays approvedAmount -> shop; claimant pays (quoteAmount - approvedAmount) -> shop
+    ///   1: insurer pays approvedAmount -> claimant
+    /// Supports partial payments; marks claim Paid when obligations are fully met.
+    function markPaid(bytes8 claimCode)
+        external
+        payable
+        onlyExisting(claimCode)
+    {
+        ClaimData storage c = _claims[claimCode];
+        require(c.status == Status.PayoutApproved, "not payout-approved");
+        require(c.approvedAmount > 0, "approvedAmount not set");
+        require(msg.value > 0, "no ETH sent");
+        require(c.shop != address(0), "shop not set");
+
+        uint8 mode = payoutMode[claimCode]; // 0 or 1
+
+        if (mode == 0) {
+            // Mode 0: insurer -> shop up to approvedAmount; claimant -> shop the remainder
+            uint128 insurerOwesToShop  = c.approvedAmount;
+            uint128 claimantOwesToShop = (c.quoteAmount > c.approvedAmount)
+                ? (c.quoteAmount - c.approvedAmount) : 0;
+
+            if (msg.sender == owner) {
+                uint128 remaining = insurerOwesToShop - insurerPaidToShop[claimCode];
+                require(remaining > 0, "insurer done");
+                uint128 toApply = uint128(msg.value);
+                require(toApply <= remaining, "excess insurer payment");
+
+                // EFFECTS
+                insurerPaidToShop[claimCode] += toApply;
+
+                // INTERACTION
+                (bool ok, ) = c.shop.call{value: toApply}("");
+                require(ok, "shop transfer failed");
+
+                emit PaymentReceived(claimCode, msg.sender, "insurer->shop", toApply, c.shop);
+            } else if (msg.sender == c.claimant) {
+                require(claimantOwesToShop > 0, "no claimant top-up required");
+                uint128 remaining = claimantOwesToShop - claimantTopUpPaid[claimCode];
+                require(remaining > 0, "claimant done");
+                uint128 toApply = uint128(msg.value);
+                require(toApply <= remaining, "excess claimant payment");
+
+                // EFFECTS
+                claimantTopUpPaid[claimCode] += toApply;
+
+                // INTERACTION
+                (bool ok, ) = c.shop.call{value: toApply}("");
+                require(ok, "shop transfer failed");
+
+                emit PaymentReceived(claimCode, msg.sender, "claimant->shop", toApply, c.shop);
+            } else {
+                revert("sender not allowed");
+            }
+
+            // Close when both sides (if any) are complete
+            bool insurerDone  = insurerPaidToShop[claimCode]  >= insurerOwesToShop;
+            bool claimantDone = (claimantOwesToShop == 0) || (claimantTopUpPaid[claimCode] >= claimantOwesToShop);
+            if (insurerDone && claimantDone) {
+                c.paidAt = uint64(block.timestamp);
+                c.status = Status.Paid;
+                emit ClaimPaid(claimCode, c.shop, c.approvedAmount);
+            }
+        } else {
+            // Mode 1: insurer -> claimant up to approvedAmount
+            require(msg.sender == owner, "only insurer in mode 1");
+
+            uint128 remaining = c.approvedAmount - insurerPaidToClaimant[claimCode];
+            require(remaining > 0, "insurer already paid claimant");
+            uint128 toApply = uint128(msg.value);
+            require(toApply <= remaining, "excess insurer payment");
+
+            // EFFECTS
+            insurerPaidToClaimant[claimCode] += toApply;
+
+            // INTERACTION
+            (bool ok, ) = c.claimant.call{value: toApply}("");
+            require(ok, "claimant transfer failed");
+
+            emit PaymentReceived(claimCode, msg.sender, "insurer->claimant", toApply, c.claimant);
+
+            if (insurerPaidToClaimant[claimCode] >= c.approvedAmount) {
+                c.paidAt = uint64(block.timestamp);
+                c.status = Status.Paid;
+                emit ClaimPaid(claimCode, c.claimant, c.approvedAmount);
+            }
+        }
     }
 
     // Adjuster or admin can deny before payout approval
