@@ -1,0 +1,12 @@
+{
+  "name": "example-policies",
+  "version": 3,
+  "files": [
+    "policy-1.json",
+    "policy-2.json",
+    "policy-3.json",
+    "policy-4.json",
+    "policy-5.json",
+    "policy-6.json"
+  ]
+}

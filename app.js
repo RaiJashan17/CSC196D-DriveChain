@@ -310,6 +310,7 @@ function asciiToBytes8(str) {
   assert(hex.length === 18, "Claim code must be exactly 8 ASCII chars");
   return hex;
 }
+
 function bytes8ToAscii(hex) {
   try { return web3.utils.hexToUtf8(hex); } catch { return hex; }
 }
@@ -513,7 +514,7 @@ async function loadMyClaims() {
 
 async function submitAdjusterSeverity() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeAdjuster").value.trim();
   const insuranceAddr = el("insuranceAddress").value.trim();
   const insuranceAmount = el("insuranceAmount").value.trim();
   const insuranceRef    = el("insuranceRef").value.trim();
@@ -564,7 +565,7 @@ async function submitAdjusterSeverity() {
 
 async function submitShopQuote() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeShop").value.trim();
   const shopAddr = el("shopAddress").value.trim();
   const quoteAmount = el("quoteAmount").value.trim();
   const quoteRef    = el("quoteRef").value.trim();
@@ -615,7 +616,7 @@ async function submitShopQuote() {
 
 async function approvePayout() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeApprove").value.trim();
   const payeeAddr = el("payeeAddress").value.trim();
   const amount    = el("amount").value.trim();
   const escrowAddress       = el("escrowAddress").value.trim();
@@ -654,7 +655,7 @@ async function approvePayout() {
 async function denyClaim() {
   requireContractsReady();
   console.log("here");
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeApprove").value.trim();
   const reasonCode    = el("reason").value.trim();
 
   const code = asciiToBytes8(codeStr);
