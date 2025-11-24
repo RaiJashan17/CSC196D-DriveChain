@@ -248,8 +248,7 @@ const CLAIM_ABI = [
   },
   {
   "inputs": [
-    {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},  
-    { "internalType": "address", "name": "to", "type": "address" },
+    { "internalType": "address",  "name": "to",   "type": "address" },
   ],
   "name": "markPaid",
   "outputs": [],
@@ -284,7 +283,7 @@ function parseGasInputs(prefix) {
 }
 
 const el = (id) => document.getElementById(id);
-const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","ClaimantToShop","Paid"];
+const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","Paid","Closed"];
 const INCIDENT = ["Collision","Theft","Vandalism","Weather","Other"];
 
 function assert(cond, msg) { if (!cond) throw new Error(msg || "Assertion failed"); }
@@ -832,10 +831,9 @@ async function payShop() {
 
   //Do payment
   if(el("activeAccount").value = claimant){
-    console.log("CLAIMANT PAYS")
     el("payTx").textContent = "Submitting transaction…";
     try {
-      const method = claim.methods.markPaid(codeHex, shop);
+      const method = claim.methods.markPaid(claimant);
       try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
         value: web3.utils.toWei(String(quoteAmount - approvedAmount), "ether") }); } catch (dryErr) { throw dryErr; }
       let sendOpts = { from: account, ...parseGasInputs("claim") };
@@ -856,7 +854,7 @@ async function payShop() {
   } else {
     el("payTx").textContent = "Submitting transaction…";
     try {
-      const method = claim.methods.markPaid(codeHex, claimant);
+      const method = claim.methods.markPaid(claimant);
       try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
         value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
       let sendOpts = { from: account, ...parseGasInputs("claim") };
@@ -903,20 +901,10 @@ async function reimburse() {
   //Do payment
   el("payTx").textContent = "Submitting transaction…";
   try {
-    const method = claim.methods.markPaid(codeHex, claimant);
-    try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
+    const method = claim.methods.markPaid(claimant);
+    console.log("SHOULD BE ACTIVE ACCOUNT: " + el("activeAccount").value);
+    try { await method.send({ from: adjuster, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
       value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
-    let sendOpts = { from: account, ...parseGasInputs("claim") };
-    if (!sendOpts.gas) {
-      try {
-        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
-        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
-      } catch (egErr) {
-        sendOpts.gas = 1000000;
-      }
-    }
-    const tx = await method.send(sendOpts);
-    el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
   } catch (err) {
     el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
     console.error(err);
