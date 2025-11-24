@@ -298,7 +298,7 @@ function tsToISO(ts) {
   if (!Number.isFinite(n) || n <= 0) return "";
   return new Date(n * 1000).toISOString();
 }
-function asEtherMaybe(x) {
+function asEther(x) {
   try { return web3.utils.fromWei(x, "ether"); } catch { return x?.toString?.() ?? String(x); }
 }
 
@@ -436,10 +436,8 @@ function renderPolicy(id, p) {
     "Holder": holder,
     "Effective": tsToISO(effectiveAt),
     "Expires": tsToISO(expiresAt),
-    "Max Coverage (USD)": String(maxCoverage),
-    "Max Coverage (Ether)": asEtherMaybe(String(maxCoverage)),
-    "Deductible (USD)": String(deductible),
-    "Deductible (Ether)": asEtherMaybe(String(deductible)),
+    "Max Coverage (Ether)": asEther(String(maxCoverage)),
+    "Deductible (Ether)": asEther(String(deductible)),
     "Active": active,
     "Details": details
   };
@@ -695,8 +693,8 @@ function renderClaim(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (USD)": String(c.policyMaxCoverage ?? c[7]),
-    "Policy Deductible (USD)": String(c.policyDeductible ?? c[8]),
+    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
+    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
@@ -732,8 +730,8 @@ function renderClaimToUser(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (USD)": String(c.policyMaxCoverage ?? c[7]),
-    "Policy Deductible (USD)": String(c.policyDeductible ?? c[8]),
+    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
+    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
