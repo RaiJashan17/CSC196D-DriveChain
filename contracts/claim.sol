@@ -294,7 +294,7 @@ contract Claim {
         
         //Logic to determine which choice claimant made (reimburse or pay to shop)
         if(msg.sender == _claims[claimCode].claimant){
-            require(c.status == Status.PayoutApproved, "waiting for approval");
+            require(c.status == Status.PayoutApproved, "waiting for approval (CLAIMANT PAYING)");
             require(to == _claims[claimCode].shop, "claimant can only pay to shop");
             emit ClaimPaid(claimCode, msg.sender, (_claims[claimCode].approvedAmount - _claims[claimCode].approvedAmount));
             c.status = Status.ClaimantToShop;
@@ -306,7 +306,7 @@ contract Claim {
             c.status = Status.Paid;
         } 
         else if(msg.sender == _claims[claimCode].adjuster && to == _claims[claimCode].claimant){
-            require(c.status == Status.PayoutApproved, "waiting for approval");
+            require(c.status == Status.PayoutApproved, "waiting for approval (ADJUSTER PAYING)");
             emit ClaimPaid(claimCode, msg.sender, _claims[claimCode].approvedAmount);
             c.paidAt = uint64(block.timestamp);
             c.status = Status.Paid;

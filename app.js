@@ -792,8 +792,11 @@ async function loadPaymentInfo() {
   const payee          = data.payee ?? data[12] ?? "";
   const claimCodeB8    = data.claimCode ?? data[0];
 
+
+  console.log(status);
   // Ready to be paid?
-  if (status !== 3 || !approvedAt || paidAt || !payee || approvedAmount === "0") {
+  if ((status !== 3 && status !== 5)) {// || !approvedAt || paidAt || !payee || approvedAmount === "0") {
+    console.log("STATUS: " + status);
     if (errEl) errEl.textContent = "This claim is not ready to be paid (Step 5 approval required).";
     return;
   }
@@ -831,8 +834,8 @@ async function payShop() {
   const txref = "0x" + "0".repeat(64);
 
   //Do payment
-  if(el("activeAccount").value = claimant){
-    console.log("CLAIMANT PAYS")
+  if(el("activeAccount").value == claimant){
+    console.log("CLAIMANT PAYS " + el("activeAccount").value);
     el("payTx").textContent = "Submitting transaction…";
     try {
       const method = claim.methods.markPaid(codeHex, shop);
@@ -854,9 +857,10 @@ async function payShop() {
       console.error(err);
     }
   } else {
+    console.log("ADJUSTER PAYS " + el("activeAccount").value);
     el("payTx").textContent = "Submitting transaction…";
     try {
-      const method = claim.methods.markPaid(codeHex, claimant);
+      const method = claim.methods.markPaid(codeHex, shop);
       try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
         value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
       let sendOpts = { from: account, ...parseGasInputs("claim") };
