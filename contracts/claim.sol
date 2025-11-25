@@ -38,7 +38,8 @@ contract Claim {
         SeveritySubmitted,  
         QuoteSubmitted,     
         PayoutApproved,     
-        Denied,             
+        Denied,
+        ClaimantToShop,            
         Paid            
     }
 
@@ -53,7 +54,7 @@ contract Claim {
     struct ClaimData {
         // Core identifiers
         bytes8  claimCode;
-        address claimant;
+        address payable claimant;
         uint64  createdAt;
 
         // Policy snapshot (at creation)
@@ -67,7 +68,7 @@ contract Claim {
 
         // Parties & roles
         address adjuster;
-        address shop;
+        address payable shop;
         address payee;
 
         // Status & timestamps
@@ -94,13 +95,12 @@ contract Claim {
 
         // Payout planning & settlement
         uint128 approvedAmount;
-        address escrowAddress;
-        bool    payoutToShop;
-        bytes32 payoutTxRef;
     }   
 
     mapping(bytes8 => ClaimData) private _claims;
     mapping(bytes8 => bool)  private _usedCodes;
+
+    event PaymentReceived(bytes8 indexed claimCode, address indexed from, string role, uint128 amount, address indexed to);
 
     event ClaimSubmitted(
         bytes8  indexed claimCode,
@@ -115,9 +115,9 @@ contract Claim {
     event ShopAssigned(bytes8 indexed claimCode, address indexed shop);
     event SeveritySubmitted(bytes8 indexed claimCode, uint128 finalCapAmount, address indexed adjuster, string adjusterNotes);
     event QuoteSubmitted(bytes8 indexed claimCode, address indexed shop, uint128 quoteAmount, string quoteRef);
-    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount, address indexed escrowAddress, bool toShop);
+    event PayoutApproved(bytes8 indexed claimCode, address indexed payee, uint128 approvedAmount);
     event ClaimDenied(bytes8 indexed claimCode, string reason);
-    event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount, bytes32 payoutTxRef);
+    event ClaimPaid(bytes8 indexed claimCode, address indexed payee, uint128 amount);
 
     modifier onlyExisting(bytes8 claimCode) {
         require(_claims[claimCode].claimCode != bytes8(0), "no such claim");
@@ -156,7 +156,7 @@ contract Claim {
         emit AdjusterAssigned(claimCode, adjuster);
     }
 
-    function setShop(bytes8 claimCode, address shop) external onlyExisting(claimCode) {
+    function setShop(bytes8 claimCode, address payable shop) external onlyExisting(claimCode) {
         require(shop != address(0), "zero shop");
         ClaimData storage c = _claims[claimCode];
         require(
@@ -197,7 +197,7 @@ contract Claim {
         ClaimData storage c = _claims[claimCode];
 
         c.claimCode = claimCode;
-        c.claimant  = msg.sender;
+        c.claimant  = payable(msg.sender);
         c.createdAt = uint64(block.timestamp);
 
         c.policyId          = policyId;
@@ -265,9 +265,7 @@ contract Claim {
     function approvePayout(
         bytes8  claimCode,
         address payee,
-        uint128 amount,
-        address escrowAddress,
-        bool    payoutToShop
+        uint128 amount
     ) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(c.status == Status.QuoteSubmitted, "waiting for quote");
@@ -280,25 +278,45 @@ contract Claim {
         amount = amount - c.policyDeductible;
 
         c.approvedAmount = amount;
-        c.escrowAddress      = escrowAddress;
-        c.payoutToShop   = payoutToShop;
         c.payee          = payee == address(0) ? c.claimant : payee;
         c.approvedAt     = uint64(block.timestamp);
         c.status         = Status.PayoutApproved;
 
-        emit PayoutApproved(claimCode, c.payee, amount, escrowAddress, payoutToShop);
+        emit PayoutApproved(claimCode, c.payee, amount);
     }
 
-    // Admin records payment settlement tx/hash
-    function markPaid(bytes8 claimCode, bytes32 payoutTxRef) external onlyAdmin onlyExisting(claimCode) {
+    function markPaid(bytes8 claimCode, address payable to) external payable {
         ClaimData storage c = _claims[claimCode];
-        require(c.status == Status.PayoutApproved, "waiting for payout approval");
+        require(to != msg.sender, "cannot pay to self");
+        require(c.status == Status.PayoutApproved 
+        || c.status == Status.ClaimantToShop, "wrong timing");
+        
+        //Logic to determine which choice claimant made (reimburse or pay to shop)
+        if(msg.sender == _claims[claimCode].claimant){
+            require(c.status == Status.PayoutApproved, "waiting for approval (CLAIMANT PAYING)");
+            require(to == _claims[claimCode].shop, "claimant can only pay to shop");
+            emit ClaimPaid(claimCode, msg.sender, (_claims[claimCode].approvedAmount - _claims[claimCode].approvedAmount));
+            c.status = Status.ClaimantToShop;
+        } 
+        else if(msg.sender == _claims[claimCode].adjuster && to == _claims[claimCode].shop){
+            require(c.status == Status.ClaimantToShop, "waiting for claimant to pay");
+            emit ClaimPaid(claimCode, msg.sender, _claims[claimCode].approvedAmount);
+            c.paidAt = uint64(block.timestamp);
+            c.status = Status.Paid;
+        } 
+        else if(msg.sender == _claims[claimCode].adjuster && to == _claims[claimCode].claimant){
+            require(c.status == Status.PayoutApproved, "waiting for approval (ADJUSTER PAYING)");
+            emit ClaimPaid(claimCode, msg.sender, _claims[claimCode].approvedAmount);
+            c.paidAt = uint64(block.timestamp);
+            c.status = Status.Paid;
 
-        c.payoutTxRef = payoutTxRef;
-        c.paidAt      = uint64(block.timestamp);
-        c.status      = Status.Paid;
+        } else {
+            require(0==1, "invalid sender/receiver pair");
+        }
 
-        emit ClaimPaid(claimCode, c.payee, c.approvedAmount, payoutTxRef);
+        require(to != address(0), "to=0");
+        (bool ok, ) = to.call{value: msg.value}("");
+        require(ok, "transfer failed");
     }
 
     // Adjuster or admin can deny before payout approval
@@ -341,7 +359,7 @@ contract Claim {
         return true;
     }
 
-    function transferOwnership(address newOwner) external onlyAdmin {
+    function transferOwnership(address payable newOwner) external onlyAdmin {
         require(newOwner != address(0), "zero owner");
         owner = newOwner;
     }

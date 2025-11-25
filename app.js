@@ -101,9 +101,6 @@ const CLAIM_ABI = [
         {"internalType":"string","name":"quoteRef","type":"string"},
 
         {"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-        {"internalType":"address","name":"escrowAddress;","type":"address"},
-        {"internalType":"bool","name":"payoutToShop","type":"bool"},
-        {"internalType":"bytes32","name":"payoutTxRef","type":"bytes32"}
       ],
       "internalType":"struct Claim.ClaimData",
       "name":"",
@@ -214,8 +211,6 @@ const CLAIM_ABI = [
       { "internalType":"bytes8",  "name":"claimCode", "type":"bytes8"  },
       { "internalType":"address", "name":"payee",    "type":"address" },
       { "internalType":"uint128",  "name":"amount",  "type":"uint128"  },
-      { "internalType":"address",  "name":"escrowAddress",  "type":"address"  },
-      { "internalType":"bool",  "name":"payoutToShop",  "type":"bool"  },
     ],
     "name":"approvePayout",
     "outputs":[],
@@ -228,8 +223,6 @@ const CLAIM_ABI = [
       {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},
       {"indexed":true,"internalType":"address","name":"payee","type":"address"},
       {"indexed":false,"internalType":"uint128","name":"approvedAmount","type":"uint128"},
-      {"indexed":true,"internalType":"address","name":"escrowAddress","type":"address"},
-      {"indexed":false,"internalType":"bool","name":"toShop","type":"bool"},
     ],
     "name":"PayoutApproved",
     "type":"event"
@@ -252,6 +245,16 @@ const CLAIM_ABI = [
     ],
     "name":"ClaimDenied",
     "type":"event"
+  },
+  {
+  "inputs": [
+    {"indexed":true,"internalType":"bytes8","name":"claimCode","type":"bytes8"},  
+    { "internalType": "address", "name": "to", "type": "address" },
+  ],
+  "name": "markPaid",
+  "outputs": [],
+  "stateMutability": "payable",
+  "type": "function"
   }
 ];
 
@@ -281,7 +284,7 @@ function parseGasInputs(prefix) {
 }
 
 const el = (id) => document.getElementById(id);
-const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","Paid","Closed"];
+const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","ClaimantToShop","Paid"];
 const INCIDENT = ["Collision","Theft","Vandalism","Weather","Other"];
 
 function assert(cond, msg) { if (!cond) throw new Error(msg || "Assertion failed"); }
@@ -329,6 +332,19 @@ function setStatus(acct, chain) {
   el("chain").textContent = chain || "—";
 }
 
+async function refreshActiveBalance() {
+  if (!web3 || !account) return;
+  try {
+    const balWei = await web3.eth.getBalance(account);
+    if (el("activeBalanceWei")) el("activeBalanceWei").textContent = balWei;
+    if (el("activeBalanceEth")) el("activeBalanceEth").textContent = web3.utils.fromWei(balWei, "ether");
+  } catch (e) {
+    if (el("activeBalanceEth")) el("activeBalanceEth").textContent = "n/a";
+    if (el("activeBalanceWei")) el("activeBalanceWei").textContent = "n/a";
+    console.warn("refreshActiveBalance:", e);
+  }
+}
+
 function attachContracts() {
   assert(web3, "Init RPC");
   assert(web3.utils.isAddress(POLICY_ADDRESS), "Invalid Policy address");
@@ -354,7 +370,8 @@ async function initGanache() {
   sel.addEventListener("change", () => {
     account = sel.value;
     setStatus(account, chainId);
-  });
+    refreshActiveBalance();
+});
   try { chainId = await web3.eth.getChainId(); } catch { chainId = "unknown"; }
   setStatus(account, chainId);
 }
@@ -617,18 +634,15 @@ async function approvePayout() {
   const codeStr    = el("claimCodeApprove").value.trim();
   const payeeAddr = el("payeeAddress").value.trim();
   const amount    = el("amount").value.trim();
-  const escrowAddress       = el("escrowAddress").value.trim();
-  const payoutToShop    = el("payoutToShop").value;
 
   const code = asciiToBytes8(codeStr);
   assert(payeeAddr, "Provide a valid payee address");
-  assert(escrowAddress, "Provide a valid escrowAddress");
   assert(amount, "Provide a valid amount");
 
   el("approveTx").textContent = "Submitting transaction…";
   try {
     const method = claim.methods.approvePayout(
-      code, payeeAddr, amount, escrowAddress, payoutToShop,
+      code, payeeAddr, amount
     );
     try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
     let sendOpts = { from: account, ...parseGasInputs("approve") };
@@ -714,9 +728,6 @@ function renderClaim(c) {
     "Quote Amount": String(c.quoteAmount ?? c[25]),
     "Quote Ref": c.quoteRef ?? c[26],
     "Approved Amount": String(c.approvedAmount ?? c[27]),
-    "Escrow Address": String(c.escrowAddress ?? c[28]),
-    "Payout To Shop": (c.payoutToShop ?? c[29]) ? "true" : "false",
-    "Payout Tx Ref": c.payoutTxRef ?? c[30],
   };
   return `<div class="card">${renderKV(kv)}</div>`;
 }
@@ -747,6 +758,172 @@ function renderClaimToUser(c) {
     "Approved Amount": String(c.approvedAmount ?? c[27]),
   };
   return `<div class="card">${renderKV(kv)}</div>`;
+}
+
+async function loadPaymentInfo() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const sec = el("paySection");
+  if (errEl) errEl.textContent = "";
+  if (sec) sec.style.display = "none";
+
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) {
+    if (errEl) errEl.textContent = "Enter an 8-character claim code.";
+    return;
+  }
+
+  const codeHex = asciiToBytes8(codeStr);
+  let data;
+  try {
+    data = await claim.methods.getClaim(codeHex).call();
+  } catch (e) {
+    if (errEl) errEl.textContent = "Could not load claim from contract.";
+    console.error(e);
+    return;
+  }
+
+  // Extract fields (support both struct & tuple)
+  const status         = Number(data.status ?? data[13] ?? 0);
+  const approvedAt     = Number(data.approvedAt ?? data[17] ?? 0);
+  const paidAt         = Number(data.paidAt ?? data[18] ?? 0);
+  const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
+  const payee          = data.payee ?? data[12] ?? "";
+  const claimCodeB8    = data.claimCode ?? data[0];
+
+
+  console.log(status);
+  // Ready to be paid?
+  if ((status !== 3 && status !== 5)) {// || !approvedAt || paidAt || !payee || approvedAmount === "0") {
+    console.log("STATUS: " + status);
+    if (errEl) errEl.textContent = "This claim is not ready to be paid (Step 5 approval required).";
+    return;
+  }
+
+  // Fill UI
+  const codeAscii = bytes8ToAscii(claimCodeB8);
+  if (el("payClaimCode"))     el("payClaimCode").value = codeAscii;
+  if (el("payPayeeAddress"))  el("payPayeeAddress").value = payee;
+  if (el("payAmount"))        el("payAmount").value = approvedAmount;
+
+  if (sec) sec.style.display = "";
+}
+
+async function payShop() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) { if (errEl) errEl.textContent = "Enter an 8-character claim code."; return; }
+
+  const codeHex = asciiToBytes8(codeStr);
+
+  const data = await claim.methods.getClaim(codeHex).call();
+
+  const adjuster       = data.adjuster;
+  const claimant       = data.claimant;
+  const shop           = data.shop;
+  const approvedAmount = data.approvedAmount;
+  const quoteAmount    = data.quoteAmount;
+  
+  console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
+
+  //I don't care about these values
+  const adv = parseGasInputs("pay");
+  const valueWei = adv.value || approvedAmount;
+  const txref = "0x" + "0".repeat(64);
+
+  //Do payment
+  if(el("activeAccount").value == claimant){
+    console.log("CLAIMANT PAYS " + el("activeAccount").value);
+    el("payTx").textContent = "Submitting transaction…";
+    try {
+      const method = claim.methods.markPaid(codeHex, shop);
+      try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
+        value: web3.utils.toWei(String(quoteAmount - approvedAmount), "ether") }); } catch (dryErr) { throw dryErr; }
+      let sendOpts = { from: account, ...parseGasInputs("claim") };
+      if (!sendOpts.gas) {
+        try {
+          const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+          sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+        } catch (egErr) {
+          sendOpts.gas = 1000000;
+        }
+      }
+      const tx = await method.send(sendOpts);
+      el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
+    } catch (err) {
+      el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+      console.error(err);
+    }
+  } else {
+    console.log("ADJUSTER PAYS " + el("activeAccount").value);
+    el("payTx").textContent = "Submitting transaction…";
+    try {
+      const method = claim.methods.markPaid(codeHex, shop);
+      try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
+        value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
+      let sendOpts = { from: account, ...parseGasInputs("claim") };
+      if (!sendOpts.gas) {
+        try {
+          const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+          sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+        } catch (egErr) {
+          sendOpts.gas = 1000000;
+        }
+      }
+      const tx = await method.send(sendOpts);
+      el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
+    } catch (err) {
+      el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+      console.error(err);
+    }
+  }
+}
+
+async function reimburse() {
+  requireContractsReady();
+  const errEl = el("payLookupErr");
+  const codeStr = (el("payLookupCode")?.value || "").trim();
+  if (!codeStr) { if (errEl) errEl.textContent = "Enter an 8-character claim code."; return; }
+
+  const codeHex = asciiToBytes8(codeStr);
+
+  const data = await claim.methods.getClaim(codeHex).call();
+
+  const adjuster       = data.adjuster;
+  const claimant       = data.claimant;
+  const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
+  
+  console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
+
+  //I don't care about these values
+  const adv = parseGasInputs("pay");
+  const valueWei = adv.value || approvedAmount;
+  const txref = "0x" + "0".repeat(64);
+
+  console.log("SHOULD BE ACTIVE ACCOUNT: " + el("activeAccount").value);
+
+  //Do payment
+  el("payTx").textContent = "Submitting transaction…";
+  try {
+    const method = claim.methods.markPaid(codeHex, claimant);
+    try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
+      value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
+    let sendOpts = { from: account, ...parseGasInputs("claim") };
+    if (!sendOpts.gas) {
+      try {
+        const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
+        sendOpts.gas = Math.max(300000, Math.ceil(est * 1.25));
+      } catch (egErr) {
+        sendOpts.gas = 1000000;
+      }
+    }
+    const tx = await method.send(sendOpts);
+    el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
+  } catch (err) {
+    el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
+    console.error(err);
+  }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -782,5 +959,14 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   el("denyClaimBtn").addEventListener("click", async () => {
     try { await denyClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("loadPayableClaimBtn").addEventListener("click", async () => {
+    try { await loadPaymentInfo(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("reimburseBtn").addEventListener("click", async () => {
+    try { await reimburse(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+  });
+  el("payShopBtn").addEventListener("click", async () => {
+    try { await payShop(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
 });
