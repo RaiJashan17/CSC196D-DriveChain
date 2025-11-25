@@ -192,7 +192,6 @@ contract Claim {
         ) = policy.getPolicy(policyId);
 
         require(active, "policy inactive");
-        require(msg.sender == holder, "not policy holder");
         require(incidentAt >= effectiveAt && incidentAt <= expiresAt, "incident outside policy window");
 
         ClaimData storage c = _claims[claimCode];

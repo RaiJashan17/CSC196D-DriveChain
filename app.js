@@ -298,7 +298,7 @@ function tsToISO(ts) {
   if (!Number.isFinite(n) || n <= 0) return "";
   return new Date(n * 1000).toISOString();
 }
-function asEtherMaybe(x) {
+function asEther(x) {
   try { return web3.utils.fromWei(x, "ether"); } catch { return x?.toString?.() ?? String(x); }
 }
 
@@ -310,6 +310,7 @@ function asciiToBytes8(str) {
   assert(hex.length === 18, "Claim code must be exactly 8 ASCII chars");
   return hex;
 }
+
 function bytes8ToAscii(hex) {
   try { return web3.utils.hexToUtf8(hex); } catch { return hex; }
 }
@@ -435,10 +436,8 @@ function renderPolicy(id, p) {
     "Holder": holder,
     "Effective": tsToISO(effectiveAt),
     "Expires": tsToISO(expiresAt),
-    "Max Coverage (USD)": String(maxCoverage),
-    "Max Coverage (Ether)": asEtherMaybe(String(maxCoverage)),
-    "Deductible (USD)": String(deductible),
-    "Deductible (Ether)": asEtherMaybe(String(deductible)),
+    "Max Coverage (Ether)": asEther(String(maxCoverage)),
+    "Deductible (Ether)": asEther(String(deductible)),
     "Active": active,
     "Details": details
   };
@@ -513,7 +512,7 @@ async function loadMyClaims() {
 
 async function submitAdjusterSeverity() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeAdjuster").value.trim();
   const insuranceAddr = el("insuranceAddress").value.trim();
   const insuranceAmount = el("insuranceAmount").value.trim();
   const insuranceRef    = el("insuranceRef").value.trim();
@@ -564,7 +563,7 @@ async function submitAdjusterSeverity() {
 
 async function submitShopQuote() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeShop").value.trim();
   const shopAddr = el("shopAddress").value.trim();
   const quoteAmount = el("quoteAmount").value.trim();
   const quoteRef    = el("quoteRef").value.trim();
@@ -615,7 +614,7 @@ async function submitShopQuote() {
 
 async function approvePayout() {
   requireContractsReady();
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeApprove").value.trim();
   const payeeAddr = el("payeeAddress").value.trim();
   const amount    = el("amount").value.trim();
   const escrowAddress       = el("escrowAddress").value.trim();
@@ -654,7 +653,7 @@ async function approvePayout() {
 async function denyClaim() {
   requireContractsReady();
   console.log("here");
-  const codeStr    = el("claimCode").value.trim();
+  const codeStr    = el("claimCodeApprove").value.trim();
   const reasonCode    = el("reason").value.trim();
 
   const code = asciiToBytes8(codeStr);
@@ -694,8 +693,8 @@ function renderClaim(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (USD)": String(c.policyMaxCoverage ?? c[7]),
-    "Policy Deductible (USD)": String(c.policyDeductible ?? c[8]),
+    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
+    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
@@ -731,8 +730,8 @@ function renderClaimToUser(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (USD)": String(c.policyMaxCoverage ?? c[7]),
-    "Policy Deductible (USD)": String(c.policyDeductible ?? c[8]),
+    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
+    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
