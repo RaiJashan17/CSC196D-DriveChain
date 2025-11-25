@@ -21,29 +21,6 @@ function mapIncidentType(s) {
 }
 function stripSlash(s){ return s.replace(/\/$/, ''); }
 
-function detectCreateClaimShape(abi) {
-  const candidates = abi.filter(e => e.type === 'function' && e.name === 'createClaim');
-  for (const fn of candidates) {
-    const types = fn.inputs.map(i => i.type);
-    if (types.length === 7 &&
-        types[0] === 'bytes8' &&
-        types[1].startsWith('uint') &&
-        types[2].startsWith('uint') &&
-        types[3].startsWith('uint') &&
-        types[4] === 'string' &&
-        types[5] === 'string' &&
-        (types[6] === 'uint8' || types[6].startsWith('uint'))) return 'withAmount';
-    if (types.length === 6 &&
-        types[0] === 'bytes8' &&
-        types[1].startsWith('uint') &&
-        types[2].startsWith('uint') &&
-        types[3] === 'string' &&
-        types[4] === 'string' &&
-        (types[5] === 'uint8' || types[5].startsWith('uint'))) return 'withoutAmount';
-  }
-  return 'unknown';
-}
-
 function clampToWindow(x, a, b) {
   if (typeof x !== 'number') x = Number(x)|0;
   if (typeof a !== 'number') a = Number(a)|0;
@@ -68,9 +45,6 @@ module.exports = async function (deployer, network, accounts) {
   const clmCid  = process.env.CLAIMS_CID;
   const limit   = parseInt(process.env.CLAIMS_LIMIT || "0", 10);
 
-  const shape = detectCreateClaimShape(Claim.abi);
-  console.log("Detected createClaim shape:", shape);
-
   const policyInfos = [];
   if (polCid) {
     const rootPol = `${gateway}/ipfs/${polCid}`;
@@ -86,8 +60,8 @@ module.exports = async function (deployer, network, accounts) {
       const eff = data.effectiveAt|0;
       const exp = data.expiresAt|0;
 
-      const maxC = web3.utils.toBN(web3.utils.toWei(String(data.maxCoverageETH), 'ether'));
-      const ded  = web3.utils.toBN(web3.utils.toWei(String(data.deductibleETH), 'ether'));
+      const maxC = data.maxCoverageETH;
+      const ded  = data.deductibleETH;
       const det  = data.details || "";
 
       const tx = await policy.createPolicy(eff, exp, maxC, ded, det, { from: holder });
@@ -131,17 +105,7 @@ module.exports = async function (deployer, network, accounts) {
 
       try {
         let tx;
-        if (shape === 'withAmount') {
-          tx = await claim.createClaim(codeHex, policyId, amountWei, incidentAt, incidentAddress, description, incidentType, { from: claimant });
-        } else if (shape === 'withoutAmount') {
-          tx = await claim.createClaim(codeHex, policyId, incidentAt, incidentAddress, description, incidentType, { from: claimant });
-        } else {
-          try {
-            tx = await claim.createClaim(codeHex, policyId, amountWei, incidentAt, incidentAddress, description, incidentType, { from: claimant });
-          } catch (e) {
-            tx = await claim.createClaim(codeHex, policyId, incidentAt, incidentAddress, description, incidentType, { from: claimant });
-          }
-        }
+        tx = await claim.createClaim(codeHex, policyId, incidentAt, incidentAddress, description, incidentType, { from: claimant });
         console.log("  claim created", {
           code: data.claimCode,
           policyId,

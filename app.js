@@ -301,9 +301,6 @@ function tsToISO(ts) {
   if (!Number.isFinite(n) || n <= 0) return "";
   return new Date(n * 1000).toISOString();
 }
-function asEther(x) {
-  try { return web3.utils.fromWei(x, "ether"); } catch { return x?.toString?.() ?? String(x); }
-}
 
 function asciiToBytes8(str) {
   assert(typeof str === "string", "claim code must be string");
@@ -453,8 +450,8 @@ function renderPolicy(id, p) {
     "Holder": holder,
     "Effective": tsToISO(effectiveAt),
     "Expires": tsToISO(expiresAt),
-    "Max Coverage (Ether)": asEther(String(maxCoverage)),
-    "Deductible (Ether)": asEther(String(deductible)),
+    "Max Coverage (Ether)": String(maxCoverage),
+    "Deductible (Ether)": String(deductible),
     "Active": active,
     "Details": details
   };
@@ -707,8 +704,8 @@ function renderClaim(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
-    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
+    "Policy Max (ETH)": String(c.policyMaxCoverage ?? c[7]),
+    "Policy Deductible (ETH)": (String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
@@ -741,8 +738,8 @@ function renderClaimToUser(c) {
     "Policy Holder": c.policyHolder ?? c[4],
     "Policy Effective": tsToISO(c.policyEffectiveAt ?? c[5]),
     "Policy Expires": tsToISO(c.policyExpiresAt ?? c[6]),
-    "Policy Max (ETH)": asEther(String(c.policyMaxCoverage ?? c[7])),
-    "Policy Deductible (ETH)": asEther(String(c.policyDeductible ?? c[8])),
+    "Policy Max (ETH)": (String(c.policyMaxCoverage ?? c[7])),
+    "Policy Deductible (ETH)": (String(c.policyDeductible ?? c[8])),
     "Policy Details": c.policyDetails ?? c[9],
     "Adjuster": c.adjuster ?? c[10],
     "Shop": c.shop ?? c[11],
