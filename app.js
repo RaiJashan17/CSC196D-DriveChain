@@ -265,6 +265,7 @@ let policy, claim;
 let POLICY_ADDRESS = "";
 let CLAIM_ADDRESS  = "";
 
+//Get gas inputs if user uses advanced gas selection option
 function parseGasInputs(prefix) {
   const gasStr = (el(prefix + "Gas")?.value || "").trim();
   const gpStr  = (el(prefix + "GasPrice")?.value || "").trim();
@@ -283,11 +284,15 @@ function parseGasInputs(prefix) {
   return sendOpts;
 }
 
+//create el for html elements and constants for different claim.sol statuses and different incident options
 const el = (id) => document.getElementById(id);
 const STATUS = ["Submitted", "SeveritySubmitted","QuoteSubmitted","PayoutApproved","Denied","ClaimantToShop","Paid"];
 const INCIDENT = ["Collision","Theft","Vandalism","Weather","Other"];
 
+//Solidity-style assert
 function assert(cond, msg) { if (!cond) throw new Error(msg || "Assertion failed"); }
+
+//Conversion functions and rendering...
 
 function toSeconds(dtLocalValue) {
   if (!dtLocalValue) return null;
@@ -295,6 +300,7 @@ function toSeconds(dtLocalValue) {
   if (Number.isNaN(ms)) return null;
   return Math.floor(ms / 1000);
 }
+
 function tsToISO(ts) {
   if (!ts) return "";
   const n = typeof ts === "string" ? Number(ts) : ts;
@@ -324,11 +330,13 @@ function renderKV(obj) {
   `;
 }
 
+//Set account statuses
 function setStatus(acct, chain) {
   el("acct").textContent = acct || "—";
   el("chain").textContent = chain || "—";
 }
 
+//Refresh active account balance
 async function refreshActiveBalance() {
   if (!web3 || !account) return;
   try {
@@ -342,6 +350,7 @@ async function refreshActiveBalance() {
   }
 }
 
+//Attach contracts
 function attachContracts() {
   assert(web3, "Init RPC");
   assert(web3.utils.isAddress(POLICY_ADDRESS), "Invalid Policy address");
@@ -350,11 +359,13 @@ function attachContracts() {
   claim  = new web3.eth.Contract(CLAIM_ABI,  CLAIM_ADDRESS);
 }
 
+//Requirement for all app.js functions that the contracts be loaded
 function requireContractsReady() {
   assert(web3 && account, "Init RPC and choose an account");
   assert(policy && claim, "Set the contract addresses and click 'Use These Addresses'");
 }
 
+//Init ganache
 async function initGanache() {
   const url = el("rpcUrl").value.trim() || "http://127.0.0.1:8545";
   web3 = new Web3(new Web3.providers.HttpProvider(url));
@@ -373,6 +384,7 @@ async function initGanache() {
   setStatus(account, chainId);
 }
 
+//Policy creation
 async function createPolicy() {
   requireContractsReady();
   const effectiveAt = toSeconds(el("effectiveAt").value);
@@ -386,11 +398,14 @@ async function createPolicy() {
   assert(maxCoverage && deductible, "Provide coverage and deductible");
 
   el("policyTx").textContent = "Submitting transaction…";
+  
   try {
-    const method = policy.methods.createPolicy(
-      String(effectiveAt), String(expiresAt), String(maxCoverage), String(deductible), details
-    );
+    const method = policy.methods.createPolicy(String(effectiveAt), String(expiresAt), String(maxCoverage), String(deductible), details);
+    
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("policy").value ? { value: parseGasInputs("policy").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("policy") };
     if (!sendOpts.gas) {
       try {
@@ -400,7 +415,9 @@ async function createPolicy() {
         sendOpts.gas = 1000000;
       }
     }
+
     const tx = await method.send(sendOpts);
+
     let newId = null;
     if (tx?.events?.PolicyCreated?.returnValues?.policyId) newId = tx.events.PolicyCreated.returnValues.policyId;
     el("policyTx").innerHTML = `Policy created. TX: <span class="mono">${tx.transactionHash}</span>${newId ? " • Policy ID: "+newId : ""}`;
@@ -410,21 +427,24 @@ async function createPolicy() {
   }
 }
 
+//Load policies associated with active account
 async function loadMyPolicies() {
   requireContractsReady();
   el("policiesList").innerHTML = `<span class="muted">Loading your PolicyCreated events…</span>`;
+  
   try {
     const latest = await web3.eth.getBlockNumber();
     const holderFilter = { holder: account };
-    const events = await policy.getPastEvents("PolicyCreated", {
-      filter: holderFilter, fromBlock: 0, toBlock: latest
-    });
+    const events = await policy.getPastEvents("PolicyCreated", {filter: holderFilter, fromBlock: 0, toBlock: latest});
+    
     if (!events.length) {
       el("policiesList").innerHTML = `<span class="warn">No policies found for ${account}</span>`;
       return;
     }
+
     events.sort((a,b) => (a.blockNumber - b.blockNumber) || (a.logIndex - b.logIndex));
     const rows = [];
+    
     for (const ev of events) {
       const id = ev.returnValues.policyId || ev.returnValues[0];
       const p  = await policy.methods.getPolicy(String(id)).call();
@@ -437,6 +457,7 @@ async function loadMyPolicies() {
   }
 }
 
+//Render policy for load
 function renderPolicy(id, p) {
   const holder      = p.holder ?? p[0];
   const effectiveAt = p.effectiveAt ?? p[1];
@@ -458,6 +479,7 @@ function renderPolicy(id, p) {
   return `<div class="card">${renderKV(kv)}</div>`;
 }
 
+//Create claim based on a policy
 async function createClaim() {
   requireContractsReady();
   const policyId   = el("claimPolicyId").value.trim();
@@ -475,10 +497,12 @@ async function createClaim() {
 
   el("claimTx").textContent = "Submitting transaction…";
   try {
-    const method = claim.methods.createClaim(
-      code, String(policyId), String(incidentAt), incAddr, desc, String(incType)
-    );
+    const method = claim.methods.createClaim(code, String(policyId), String(incidentAt), incAddr, desc, String(incType));
+    
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("claim").value ? { value: parseGasInputs("claim").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("claim") };
     if (!sendOpts.gas) {
       try {
@@ -488,7 +512,9 @@ async function createClaim() {
         sendOpts.gas = 1000000;
       }
     }
+
     const tx = await method.send(sendOpts);
+
     el("claimTx").innerHTML = `Claim created. TX: <span class="mono">${tx.transactionHash}</span>`;
   } catch (err) {
     el("claimTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
@@ -496,19 +522,20 @@ async function createClaim() {
   }
 }
 
+//Load claims for active account
 async function loadMyClaims() {
   requireContractsReady();
   el("claimsList").innerHTML = `<span class="muted">Loading your ClaimSubmitted events…</span>`;
   try {
     const latest = await web3.eth.getBlockNumber();
     const claimantFilter = { claimant: account };
-    const events = await claim.getPastEvents("ClaimSubmitted", {
-      filter: claimantFilter, fromBlock: 0, toBlock: latest
-    });
+    const events = await claim.getPastEvents("ClaimSubmitted", {filter: claimantFilter, fromBlock: 0, toBlock: latest});
+    
     if (!events.length) {
       el("claimsList").innerHTML = `<span class="warn">No claims found for ${account}</span>`;
       return;
     }
+
     events.sort((a,b) => (a.blockNumber - b.blockNumber) || (a.logIndex - b.logIndex));
     const rows = [];
     for (const ev of events) {
@@ -524,6 +551,7 @@ async function loadMyClaims() {
   }
 }
 
+//Insurance adjuster submits severity (max allowed amount of money)
 async function submitAdjusterSeverity() {
   requireContractsReady();
   const codeStr    = el("claimCodeAdjuster").value.trim();
@@ -538,10 +566,12 @@ async function submitAdjusterSeverity() {
 
   el("insuranceTx").textContent = "Submitting transaction…";
   try {
-    let method = claim.methods.setAdjuster(
-      code, insuranceAddr
-    );
+    let method = claim.methods.setAdjuster( code, insuranceAddr);
+    
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("insurance").value ? { value: parseGasInputs("insurance").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("insurance") };
     if (!sendOpts.gas) {
       try {
@@ -551,11 +581,14 @@ async function submitAdjusterSeverity() {
         sendOpts.gas = 1000000;
       }
     }
+
     let tx = await method.send(sendOpts);
-    method = claim.methods.adjusterConfirmSeverity(
-      code, insuranceAmount, String(insuranceRef)
-    );
+    method = claim.methods.adjusterConfirmSeverity(code, insuranceAmount, String(insuranceRef));
+    
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("insurance").value ? { value: parseGasInputs("insurance").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     sendOpts = { from: account, ...parseGasInputs("insurance") };
     if (!sendOpts.gas) {
       try {
@@ -565,7 +598,9 @@ async function submitAdjusterSeverity() {
         sendOpts.gas = 1000000;
       }
     }
+
     tx = await method.send(sendOpts);
+
     el("insuranceTx").innerHTML = `Insurance approved amount submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
     el("insuranceResult").innerHTML = renderClaim(updated);
@@ -575,7 +610,10 @@ async function submitAdjusterSeverity() {
   }
 }
 
+//Shop looks at claim and gives a quote
 async function submitShopQuote() {
+
+  //Set up constants
   requireContractsReady();
   const codeStr    = el("claimCodeShop").value.trim();
   const shopAddr = el("shopAddress").value.trim();
@@ -587,12 +625,15 @@ async function submitShopQuote() {
   assert(quoteAmount, "Provide a valid quote amount");
   assert(quoteRef, "Provide quote reference notes");
 
+  //Execute setShop and submitRepairQuote
   el("quoteTx").textContent = "Submitting transaction…";
   try {
-    let method = claim.methods.setShop(
-      code, shopAddr
-    );
+    let method = claim.methods.setShop(code, shopAddr);
+    
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("quote").value ? { value: parseGasInputs("quote").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("quote") };
     if (!sendOpts.gas) {
       try {
@@ -602,12 +643,17 @@ async function submitShopQuote() {
         sendOpts.gas = 1000000;
       }
     }
+    
     let tx = await method.send(sendOpts);
-    method = claim.methods.submitRepairQuote(
-      code, quoteAmount, String(quoteRef)
-    );
+    
+    //submitRepairQuote method execution
+    method = claim.methods.submitRepairQuote(code, quoteAmount, String(quoteRef));
+
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("quote").value ? { value: parseGasInputs("quote").value } : {}) }); } catch (dryErr) { throw dryErr; }
     sendOpts = { from: account, ...parseGasInputs("quote") };
+
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     if (!sendOpts.gas) {
       try {
         const est = await method.estimateGas({ from: account, value: sendOpts.value || 0 });
@@ -616,7 +662,9 @@ async function submitShopQuote() {
         sendOpts.gas = 1000000;
       }
     }
+    
     tx = await method.send(sendOpts);
+
     el("quoteTx").innerHTML = `Shop quote submitted. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
     el("quoteResult").innerHTML = renderClaim(updated);
@@ -626,7 +674,10 @@ async function submitShopQuote() {
   }
 }
 
+//Adjuster decides to approve the claim after seeing the shop's quote
 async function approvePayout() {
+  
+  //Set up constants
   requireContractsReady();
   const codeStr    = el("claimCodeApprove").value.trim();
   const payeeAddr = el("payeeAddress").value.trim();
@@ -636,12 +687,15 @@ async function approvePayout() {
   assert(payeeAddr, "Provide a valid payee address");
   assert(amount, "Provide a valid amount");
 
+  //Execute approvePayout method
   el("approveTx").textContent = "Submitting transaction…";
   try {
-    const method = claim.methods.approvePayout(
-      code, payeeAddr, amount
-    );
+    const method = claim.methods.approvePayout(code, payeeAddr, amount);
+
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
+     
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("approve") };
     if (!sendOpts.gas) {
       try {
@@ -651,7 +705,9 @@ async function approvePayout() {
         sendOpts.gas = 1000000;
       }
     }
+    
     const tx = await method.send(sendOpts);
+
     el("approveTx").innerHTML = `Payout Approved. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
     el("approveResult").innerHTML = renderClaim(updated);
@@ -661,21 +717,28 @@ async function approvePayout() {
   }
 }
 
+//Adjuster decides to deny the claim after seeing the shop's quote
 async function denyClaim() {
+  
+  //Set up constants
   requireContractsReady();
-  console.log("here");
   const codeStr    = el("claimCodeApprove").value.trim();
   const reasonCode    = el("reason").value.trim();
 
   const code = asciiToBytes8(codeStr);
   assert(reasonCode, "Provide a reason");
 
+  //Execute denyClaim
   el("approveTx").textContent = "Submitting transaction…";
   try {
     const method = claim.methods.denyClaim(
       code, reasonCode
     );
+
+    //Safety call in case method fails
     try { await method.call({ from: account, ...(parseGasInputs("approve").value ? { value: parseGasInputs("approve").value } : {}) }); } catch (dryErr) { throw dryErr; }
+    
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("approve") };
     if (!sendOpts.gas) {
       try {
@@ -685,7 +748,9 @@ async function denyClaim() {
         sendOpts.gas = 1000000;
       }
     }
+
     const tx = await method.send(sendOpts);
+
     el("approveTx").innerHTML = `Claim denied. TX: <span class="mono">${tx.transactionHash}</span>`;
     const updated = await claim.methods.getClaim(code).call();
     el("approveResult").innerHTML = renderClaim(updated);
@@ -695,6 +760,7 @@ async function denyClaim() {
   }
 }
 
+//Renders full claim for insurance or shop
 function renderClaim(c) {
   const kv = {
     "Claim Code": bytes8ToAscii(c.claimCode ?? c[0]),
@@ -729,6 +795,7 @@ function renderClaim(c) {
   return `<div class="card">${renderKV(kv)}</div>`;
 }
 
+//Renders the claim for user
 function renderClaimToUser(c) {
   const kv = {
     "Claim Code": bytes8ToAscii(c.claimCode ?? c[0]),
@@ -757,7 +824,10 @@ function renderClaimToUser(c) {
   return `<div class="card">${renderKV(kv)}</div>`;
 }
 
+//When claimant is ready to decide to pay or be reimbursed, load unchangeable claim info based on claim code
 async function loadPaymentInfo() {
+  
+  //Check for valid claim code
   requireContractsReady();
   const errEl = el("payLookupErr");
   const sec = el("paySection");
@@ -770,7 +840,9 @@ async function loadPaymentInfo() {
     return;
   }
 
+  //Set up constants
   const codeHex = asciiToBytes8(codeStr);
+  
   let data;
   try {
     data = await claim.methods.getClaim(codeHex).call();
@@ -785,16 +857,17 @@ async function loadPaymentInfo() {
   const payee          = data.payee ?? data[12] ?? "";
   const claimCodeB8    = data.claimCode ?? data[0];
 
-
+  //Debugging log for ready to be paid
   console.log(status);
-  // Ready to be paid?
-  if ((status !== 3 && status !== 5)) {// || !approvedAt || paidAt || !payee || approvedAmount === "0") {
+  
+  //Check if ready to be paid
+  if ((status !== 3 && status !== 5)) {
     console.log("STATUS: " + status);
     if (errEl) errEl.textContent = "This claim is not ready to be paid (Step 5 approval required).";
     return;
   }
 
-  // Fill UI
+  //Fill UI
   const codeAscii = bytes8ToAscii(claimCodeB8);
   if (el("payClaimCode"))     el("payClaimCode").value = codeAscii;
   if (el("payPayeeAddress"))  el("payPayeeAddress").value = payee;
@@ -803,7 +876,10 @@ async function loadPaymentInfo() {
   if (sec) sec.style.display = "";
 }
 
+//Claimant decides to have the pay the remainder (quote - approvedAmount) to the shop and have insurance pay the approvedAmount
 async function payShop() {
+  
+  //Set up constants
   requireContractsReady();
   const errEl = el("payLookupErr");
   const codeStr = (el("payLookupCode")?.value || "").trim();
@@ -819,15 +895,21 @@ async function payShop() {
   const approvedAmount = data.approvedAmount;
   const quoteAmount    = data.quoteAmount;
   
-  console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
-
+  //Execute markPaid as claimant or as adjuster
   if(el("activeAccount").value == claimant){
+    //Debugging log
     console.log("CLAIMANT PAYS " + el("activeAccount").value);
+    
+    //Execute markPaid method as claimant
     el("payTx").textContent = "Submitting transaction…";
     try {
       const method = claim.methods.markPaid(codeHex, shop);
+      
+      //Safety call in case method fails
       try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
         value: web3.utils.toWei(String(quoteAmount - approvedAmount), "ether") }); } catch (dryErr) { throw dryErr; }
+      
+      //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
       let sendOpts = { from: account, ...parseGasInputs("claim") };
       if (!sendOpts.gas) {
         try {
@@ -837,19 +919,28 @@ async function payShop() {
           sendOpts.gas = 1000000;
         }
       }
+
       const tx = await method.send(sendOpts);
+
       el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
     } catch (err) {
       el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
       console.error(err);
     }
   } else {
+    //Debugging log
     console.log("ADJUSTER PAYS " + el("activeAccount").value);
+
+    //Execute markPaid method as adjuster
     el("payTx").textContent = "Submitting transaction…";
     try {
       const method = claim.methods.markPaid(codeHex, shop);
+
+      //Safety call in case method fails
       try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
         value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
+
+      //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
       let sendOpts = { from: account, ...parseGasInputs("claim") };
       if (!sendOpts.gas) {
         try {
@@ -859,7 +950,9 @@ async function payShop() {
           sendOpts.gas = 1000000;
         }
       }
+
       const tx = await method.send(sendOpts);
+
       el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
     } catch (err) {
       el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
@@ -868,7 +961,10 @@ async function payShop() {
   }
 }
 
+//Claimant decides to have the approvedAmount paid to them directly
 async function reimburse() {
+  
+  //Set up constants
   requireContractsReady();
   const errEl = el("payLookupErr");
   const codeStr = (el("payLookupCode")?.value || "").trim();
@@ -881,16 +977,18 @@ async function reimburse() {
   const adjuster       = data.adjuster;
   const claimant       = data.claimant;
   const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
-  
-  console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
 
-  console.log("SHOULD BE ACTIVE ACCOUNT: " + el("activeAccount").value);
-
+  //Execute markPaid method
   el("payTx").textContent = "Submitting transaction…";
+  
   try {
     const method = claim.methods.markPaid(codeHex, claimant);
+
+    //Safety call in case method fails
     try { await method.send({ from: el("activeAccount").value, gas:500000, gasPrice: web3.utils.toWei('20', 'gwei'),
       value: web3.utils.toWei(approvedAmount, "ether") }); } catch (dryErr) { throw dryErr; }
+
+    //Prepare to do actual send with a 1.25 times safety cushion on gas estimate
     let sendOpts = { from: account, ...parseGasInputs("claim") };
     if (!sendOpts.gas) {
       try {
@@ -900,7 +998,9 @@ async function reimburse() {
         sendOpts.gas = 1000000;
       }
     }
+
     const tx = await method.send(sendOpts);
+
     el("payTx").innerHTML = `Paid. TX: <span class="mono">${tx.transactionHash}</span>`;
   } catch (err) {
     el("payTx").innerHTML = `<span class="err">Error:</span> ${(err && (err.message || err.reason || JSON.stringify(err)))}`;
@@ -908,6 +1008,7 @@ async function reimburse() {
   }
 }
 
+//Grab button clicks
 window.addEventListener("DOMContentLoaded", () => {
   el("initGanacheBtn").addEventListener("click", async () => {
     try { await initGanache(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
