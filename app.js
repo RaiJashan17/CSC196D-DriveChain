@@ -780,10 +780,7 @@ async function loadPaymentInfo() {
     return;
   }
 
-  // Extract fields (support both struct & tuple)
   const status         = Number(data.status ?? data[13] ?? 0);
-  const approvedAt     = Number(data.approvedAt ?? data[17] ?? 0);
-  const paidAt         = Number(data.paidAt ?? data[18] ?? 0);
   const approvedAmount = String(data.approvedAmount ?? data[27] ?? "0");
   const payee          = data.payee ?? data[12] ?? "";
   const claimCodeB8    = data.claimCode ?? data[0];
@@ -824,12 +821,6 @@ async function payShop() {
   
   console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
 
-  //I don't care about these values
-  const adv = parseGasInputs("pay");
-  const valueWei = adv.value || approvedAmount;
-  const txref = "0x" + "0".repeat(64);
-
-  //Do payment
   if(el("activeAccount").value == claimant){
     console.log("CLAIMANT PAYS " + el("activeAccount").value);
     el("payTx").textContent = "Submitting transaction…";
@@ -893,14 +884,8 @@ async function reimburse() {
   
   console.log("adjuster: " + adjuster,"claimant: " + claimant,"approvedAmount: " +  approvedAmount)
 
-  //I don't care about these values
-  const adv = parseGasInputs("pay");
-  const valueWei = adv.value || approvedAmount;
-  const txref = "0x" + "0".repeat(64);
-
   console.log("SHOULD BE ACTIVE ACCOUNT: " + el("activeAccount").value);
 
-  //Do payment
   el("payTx").textContent = "Submitting transaction…";
   try {
     const method = claim.methods.markPaid(codeHex, claimant);
@@ -933,37 +918,52 @@ window.addEventListener("DOMContentLoaded", () => {
     try { attachContracts(); alert("Attached to contracts"); }
     catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
-  el("createPolicyBtn").addEventListener("click", async () => {
-    try { await createPolicy(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("loadPoliciesBtn").addEventListener("click", async () => {
+  const createPolicyBtn = document.getElementById("createPolicyBtn");
+  if (createPolicyBtn) {
+    el("createPolicyBtn").addEventListener("click", async () => {
+      try { await createPolicy(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+    el("loadPoliciesBtn").addEventListener("click", async () => {
     try { await loadMyPolicies(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("createClaimBtn").addEventListener("click", async () => {
+    });
+  }
+  const createClaimBtn = document.getElementById("createClaimBtn");
+  if (createClaimBtn) {
+    el("createClaimBtn").addEventListener("click", async () => {
     try { await createClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
   el("loadClaimsBtn").addEventListener("click", async () => {
     try { await loadMyClaims(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
   });
-  el("submitInsuranceAmountBtn").addEventListener("click", async () => {
-    try { await submitAdjusterSeverity(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("submitRepairQuoteBtn").addEventListener("click", async () => {
-    try { await submitShopQuote(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("approveClaimBtn").addEventListener("click", async () => {
-    try { await approvePayout(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("denyClaimBtn").addEventListener("click", async () => {
-    try { await denyClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("loadPayableClaimBtn").addEventListener("click", async () => {
-    try { await loadPaymentInfo(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("reimburseBtn").addEventListener("click", async () => {
-    try { await reimburse(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
-  el("payShopBtn").addEventListener("click", async () => {
-    try { await payShop(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
-  });
+  }
+  const submitInsuranceAmountBtn = document.getElementById("submitInsuranceAmountBtn");
+  if (submitInsuranceAmountBtn) {
+    el("submitInsuranceAmountBtn").addEventListener("click", async () => {
+      try { await submitAdjusterSeverity(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+    el("approveClaimBtn").addEventListener("click", async () => {
+      try { await approvePayout(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+    el("denyClaimBtn").addEventListener("click", async () => {
+      try { await denyClaim(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+  }
+  const submitRepairQuoteBtn = document.getElementById("submitRepairQuoteBtn");
+  if (submitRepairQuoteBtn) {
+    el("submitRepairQuoteBtn").addEventListener("click", async () => {
+      try { await submitShopQuote(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+  }
+  const loadPayableClaimBtn = document.getElementById("loadPayableClaimBtn");
+  if (loadPayableClaimBtn) {
+    el("loadPayableClaimBtn").addEventListener("click", async () => {
+      try { await loadPaymentInfo(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+    el("reimburseBtn").addEventListener("click", async () => {
+      try { await reimburse(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+    el("payShopBtn").addEventListener("click", async () => {
+      try { await payShop(); } catch (err) { alert((err && (err.message || err.reason || JSON.stringify(err)))); }
+    });
+  }
 });

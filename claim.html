@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DriveChain</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            background: #0c0f14;
+            color: #e6edf3;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin: 0 0 12px;
+        }
+
+        .card {
+            background: #11161f;
+            border: 1px solid #1f2a37;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 0 0 auto;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin: 8px 0 4px;
+            color: #b6c2d1;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #2b394a;
+            background: #0c1117;
+            color: #e6edf3;
+        }
+
+        input.mono,
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        textarea {
+            min-height: 90px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #1f2937;
+            color: #e6edf3;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #2563eb;
+            border-color: #1d4ed8;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+
+        .muted {
+            color: #9fb0c1;
+        }
+
+        .ok {
+            color: #22c55e;
+        }
+
+        .warn {
+            color: #eab308;
+        }
+
+        .err {
+            color: #f43f5e;
+        }
+
+        .small {
+            font-size: 0.9rem;
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 6px 12px;
+        }
+
+        hr {
+            border-color: #1f2a37;
+        }
+    </style>
+    <!-- Web3.js (1.x) -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.4/dist/web3.min.js"></script>
+    <script defer src="./app.js"></script>
+</head>
+
+<body>
+    <h1>DriveChain Demo dApp</h1>
+
+    <div class="card">
+        <h2>0) RPC / Accounts</h2>
+        <div style="display: flex;flex-direction: row;gap: 50px;width: 90%;">
+            <div>
+                <label for="rpcUrl">RPC URL</label>
+                <input id="rpcUrl" class="mono" value="http://127.0.0.1:8545" />
+            </div>
+            <div>
+                <label for="activeAccount">Active Account (Ganache)</label>
+                <select id="activeAccount"></select>
+            </div>
+            <div style="align-self:end;">
+                <button id="initGanacheBtn" class="primary">Init RPC (Ganache)</button>
+            </div>
+        </div>
+        <div style="margin-top:8px;">
+            <div class="small" style="display: flex; flex-direction: column; gap: 5px;">
+                <div><strong>Connected:</strong> <span id="acct" class="mono muted">–</span></div>
+                <div><strong>ChainId:</strong> <span id="chain" class="mono muted">–</span></div>
+                <div><strong>Balance:</strong> <span id="activeBalanceEth">—</span> ETH</div>
+            </div>
+        </div>
+        <hr />
+        <div style="display: flex; flex-direction: row; gap: 50px; width: 90%;">
+            <div>
+                <label for="policyAddress">Policy Contract Address</label>
+                <input id="policyAddress" placeholder="0x... (Policy)" class="mono" />
+            </div>
+            <div>
+                <label for="claimAddress">Claim Contract Address</label>
+                <input id="claimAddress" placeholder="0x... (Claim)" class="mono" />
+            </div>
+            <div style="align-self:end;">
+                <button id="saveAddressesBtn">Use These Addresses</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2) Create / View Claims</h2>
+        <div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+                <div>
+                    <label for="claimPolicyId">Policy ID</label>
+                    <input id="claimPolicyId" class="mono" placeholder="e.g., 1" />
+                </div>
+                <div>
+                    <label for="claimCode">Claim Code (exactly 8 chars, A1234567)</label>
+                    <input id="claimCode" maxlength="8" placeholder="A1234567" />
+                </div>
+                <div>
+                    <label for="incidentAt">Incident Time</label>
+                    <input id="incidentAt" type="datetime-local" />
+                </div>
+                <div>
+                    <label for="incidentType">Incident Type</label>
+                    <select id="incidentType" style="width: 104%;">
+                        <option value="0">Collision (0)</option>
+                        <option value="1">Theft (1)</option>
+                        <option value="2">Vandalism (2)</option>
+                        <option value="3">Weather (3)</option>
+                        <option value="4">Other (4)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="incidentAddress">Incident Address</label>
+                    <textarea id="incidentAddress" placeholder="e.g., 123 Main St"></textarea>
+                </div>
+                <div>
+                    <label for="description">Description</label>
+                    <textarea id="description" placeholder="Short description of the incident"></textarea>
+                </div>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <button id="createClaimBtn" class="primary">Create Claim</button>
+                <button id="loadClaimsBtn">Load My Claims</button>
+            </div>
+            <div id="claimTx" class="small mono muted" style="margin-top:8px"></div>
+            <details style="margin-top:8px">
+                <summary>Advanced (gas / value)</summary>
+                <div
+                    style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+                    <div>
+                        <label for="claimGas">Gas Limit (optional)</label>
+                        <input id="claimGas" class="mono" placeholder="auto (estimate)" />
+                    </div>
+                    <div>
+                        <label for="claimGasPrice">Gas Price (gwei, optional)</label>
+                        <input id="claimGasPrice" class="mono" placeholder="auto" />
+                    </div>
+                    <div>
+                        <label for="claimValue">Value (wei, optional)</label>
+                        <input id="claimValue" class="mono" placeholder="0" />
+                    </div>
+                </div>
+            </details>
+            <div id="claimsList" style="margin-top:12px"></div>
+        </div>
+    </div>
+
+</html>
