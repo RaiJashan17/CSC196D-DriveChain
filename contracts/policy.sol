@@ -80,15 +80,6 @@ contract Policy {
         emit PolicyUpdated(policyId, effectiveAt, expiresAt, maxCoverage, deductible, p.active, details);
     }
 
-    /// Holder can set active flag (e.g., cancel/restore).
-    function setActive(uint256 policyId, bool active) external {
-        PolicyData storage p = _policies[policyId];
-        require(p.id != 0, "no such policy");
-        require(msg.sender == p.holder, "not holder");
-        p.active = active;
-        emit PolicyActiveSet(policyId, active);
-    }
-
     function getPolicy(uint256 policyId)
         external
         view

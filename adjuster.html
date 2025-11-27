@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DriveChain</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            background: #0c0f14;
+            color: #e6edf3;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin: 0 0 12px;
+        }
+
+        .card {
+            background: #11161f;
+            border: 1px solid #1f2a37;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 0 0 auto;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin: 8px 0 4px;
+            color: #b6c2d1;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #2b394a;
+            background: #0c1117;
+            color: #e6edf3;
+        }
+
+        input.mono,
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        textarea {
+            min-height: 90px;
+        }
+
+        button {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #1f2937;
+            color: #e6edf3;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #2563eb;
+            border-color: #1d4ed8;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+
+        .muted {
+            color: #9fb0c1;
+        }
+
+        .ok {
+            color: #22c55e;
+        }
+
+        .warn {
+            color: #eab308;
+        }
+
+        .err {
+            color: #f43f5e;
+        }
+
+        .small {
+            font-size: 0.9rem;
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 6px 12px;
+        }
+
+        hr {
+            border-color: #1f2a37;
+        }
+    </style>
+    <!-- Web3.js (1.x) -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.4/dist/web3.min.js"></script>
+    <script defer src="./app.js"></script>
+</head>
+
+<body>
+    <h1>DriveChain DApp - Adjuster</h1>
+
+    <div class="card">
+        <h2>0) RPC / Accounts</h2>
+        <div style="display: flex;flex-direction: row;gap: 50px;width: 90%;">
+            <div>
+                <label for="rpcUrl">RPC URL</label>
+                <input id="rpcUrl" class="mono" value="http://127.0.0.1:8545" />
+            </div>
+            <div>
+                <label for="activeAccount">Active Account (Ganache)</label>
+                <select id="activeAccount"></select>
+            </div>
+            <div style="align-self:end;">
+                <button id="initGanacheBtn" class="primary">Init RPC (Ganache)</button>
+            </div>
+        </div>
+        <div style="margin-top:8px;">
+            <div class="small" style="display: flex; flex-direction: column; gap: 5px;">
+                <div><strong>Connected:</strong> <span id="acct" class="mono muted">–</span></div>
+                <div><strong>ChainId:</strong> <span id="chain" class="mono muted">–</span></div>
+                <div><strong>Balance:</strong> <span id="activeBalanceEth">—</span> ETH</div>
+            </div>
+        </div>
+        <hr />
+        <div style="display: flex; flex-direction: row; gap: 50px; width: 90%;">
+            <div>
+                <label for="policyAddress">Policy Contract Address</label>
+                <input id="policyAddress" placeholder="0x... (Policy)" class="mono" />
+            </div>
+            <div>
+                <label for="claimAddress">Claim Contract Address</label>
+                <input id="claimAddress" placeholder="0x... (Claim)" class="mono" />
+            </div>
+            <div style="align-self:end;">
+                <button id="saveAddressesBtn">Use These Addresses</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>3) Submit Insurance Approved Amount</h2>
+        <div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+                <div>
+                    <label for="claimCodeAdjuster">Claim Code (8 chars)</label>
+                    <input id="claimCodeAdjuster" maxlength="8" placeholder="A1234567" />
+                </div>
+                <div>
+                    <label for="insuranceAddress">Insurance Address (0x…)</label>
+                    <input id="insuranceAddress" class="mono" placeholder="0x..." />
+                </div>
+                <div>
+                    <label for="insuranceAmount">Approved Amount</label>
+                    <input id="insuranceAmount" class="mono" placeholder="10000" />
+                </div>
+                <div>
+                    <label for="insuranceRef">Insurance Reference/Notes</label>
+                    <textarea id="insuranceRef" placeholder="Insurance reference or notes about insurance"></textarea>
+                </div>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <button id="submitInsuranceAmountBtn" class="primary">Submit Amount</button>
+            </div>
+            <div id="insuranceTx" class="small mono muted" style="margin-top:8px"></div>
+            <details style="margin-top:8px">
+                <summary>Advanced (gas / value)</summary>
+                <div
+                    style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+                    <div>
+                        <label for="insuranceGas">Gas Limit (optional)</label>
+                        <input id="insuranceGas" class="mono" placeholder="auto (estimate)" />
+                    </div>
+                    <div>
+                        <label for="insuranceGasPrice">Gas Price (gwei, optional)</label>
+                        <input id="insuranceGasPrice" class="mono" placeholder="auto" />
+                    </div>
+                    <div>
+                        <label for="insuranceValue">Value (wei, optional)</label>
+                        <input id="insuranceValue" class="mono" placeholder="0" />
+                    </div>
+                </div>
+            </details>
+            <div id="insuranceResult" style="margin-top:12px"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>5) Approve or Deny Claim</h2>
+        <div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 97%;">
+                <div>
+                    <label for="claimCodeApprove">Claim Code (8 chars, Required)</label>
+                    <input id="claimCodeApprove" maxlength="8" placeholder="A1234567" />
+                </div>
+                <div>
+                    <label for="payeeAddress">Payee Address (0x…, Only For Approval)</label>
+                    <input id="payeeAddress" class="mono" placeholder="0x..." />
+                </div>
+                <div>
+                    <label for="amount">Amount To Pay (Only For Approval)</label>
+                    <input id="amount" class="mono" placeholder="10000" />
+                </div>
+                <div>
+                    <label for="reason">Reason For Denial</label>
+                    <textarea id="reason" placeholder="Details of Denial"></textarea>
+                </div>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <button id="approveClaimBtn" class="primary">Approve Payout</button>
+                <button id="denyClaimBtn" class="primary">Deny Claim</button>
+            </div>
+            <div id="approveTx" class="small mono muted" style="margin-top:8px"></div>
+            <details style="margin-top:8px">
+                <summary>Advanced (gas / value)</summary>
+                <div
+                    style="margin-top:8px; display: flex; flex-direction: row; width: 50%; justify-content: space-between;">
+                    <div>
+                        <label for="approveGas">Gas Limit (optional)</label>
+                        <input id="approveGas" class="mono" placeholder="auto (estimate)" />
+                    </div>
+                    <div>
+                        <label for="approveGasPrice">Gas Price (gwei, optional)</label>
+                        <input id="approveGasPrice" class="mono" placeholder="auto" />
+                    </div>
+                    <div>
+                        <label for="approveValue">Value (wei, optional)</label>
+                        <input id="approveValue" class="mono" placeholder="0" />
+                    </div>
+                </div>
+            </details>
+            <div id="approveResult" style="margin-top:12px"></div>
+        </div>
+    </div>
+
+</html>

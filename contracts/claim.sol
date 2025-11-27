@@ -19,7 +19,7 @@ interface IPolicyReader {
 
 contract Claim {
     address public owner;
-    IPolicyReader public policy; // policy registry/reader contract
+    IPolicyReader public policy;
 
     modifier onlyAdmin() {
         require(msg.sender == owner, "not admin");
@@ -168,7 +168,6 @@ contract Claim {
         emit ShopAssigned(claimCode, shop);
     }
 
-    /// Create a claim and bind it to a policy.
     function createClaim(
         bytes8       claimCode,
         uint256      policyId,
@@ -240,7 +239,6 @@ contract Claim {
         emit SeveritySubmitted(claimCode, finalCapAmount, c.adjuster, adjusterNotes);
     }
 
-    // Shop submits repair quote
     function submitRepairQuote(
         bytes8  claimCode,
         uint128 quoteAmount,
@@ -261,7 +259,6 @@ contract Claim {
         emit QuoteSubmitted(claimCode, c.shop, quoteAmount, quoteRef);
     }
 
-    // Adjuster (or admin) approves payout
     function approvePayout(
         bytes8  claimCode,
         address payee,
@@ -291,7 +288,6 @@ contract Claim {
         require(c.status == Status.PayoutApproved 
         || c.status == Status.ClaimantToShop, "wrong timing");
         
-        //Logic to determine which choice claimant made (reimburse or pay to shop)
         if(msg.sender == _claims[claimCode].claimant){
             require(c.status == Status.PayoutApproved, "waiting for approval (CLAIMANT PAYING)");
             require(to == _claims[claimCode].shop, "claimant can only pay to shop");
@@ -319,7 +315,6 @@ contract Claim {
         require(ok, "transfer failed");
     }
 
-    // Adjuster or admin can deny before payout approval
     function denyClaim(bytes8 claimCode, string calldata reason) external onlyAdjusterOrAdmin(claimCode) onlyExisting(claimCode) {
         ClaimData storage c = _claims[claimCode];
         require(
@@ -335,17 +330,6 @@ contract Claim {
     function getClaim(bytes8 claimCode) external view returns (ClaimData memory) {
         return _claims[claimCode];
     }
-    function getStatus(bytes8 claimCode) external view returns (Status) {
-        return _claims[claimCode].status;
-    }
-
-    function claimCodeToString(bytes8 code) external pure returns (string memory) {
-        bytes memory out = new bytes(8);
-        for (uint256 i = 0; i < 8; i++) {
-            out[i] = code[i];
-        }
-        return string(out);
-    }
 
     // Enforces [A–Z][0–9]{7}
     function _isValidClaimCode(bytes8 code) internal pure returns (bool) {
@@ -357,10 +341,5 @@ contract Claim {
             if (d < 0x30 || d > 0x39) return false;
         }
         return true;
-    }
-
-    function transferOwnership(address payable newOwner) external onlyAdmin {
-        require(newOwner != address(0), "zero owner");
-        owner = newOwner;
     }
 }
